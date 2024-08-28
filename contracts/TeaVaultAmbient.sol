@@ -418,6 +418,7 @@ contract TeaVaultAmbient is
 
         address _ambientSwapDex = address(ambientSwapDex);
         uint256 positionLength = positions.length;
+        uint256 value = _token0.isNative() ? token0Balance : 0;
         uint256 i;
         bool added;
 
@@ -426,7 +427,7 @@ contract TeaVaultAmbient is
         for (; i < positionLength; i++) {
             Position storage position = positions[i];
             if (position.tickLower == _tickLower && position.tickUpper == _tickUpper) {
-                (amount0, amount1) = _addLiquidity(token0Balance, _tickLower, _tickUpper, _liquidity, _amount0Min, _amount1Min);
+                (amount0, amount1) = _addLiquidity(value, _tickLower, _tickUpper, _liquidity, _amount0Min, _amount1Min);
                 position.liquidity += _liquidity.toUint128();
                 added = true;
             }
@@ -435,7 +436,7 @@ contract TeaVaultAmbient is
         if (i == MAX_POSITION_LENGTH) revert PositionLengthExceedsLimit();
 
         if (!added) {
-            (amount0, amount1) = _addLiquidity(token0Balance, _tickLower, _tickUpper, _liquidity, _amount0Min, _amount1Min);
+            (amount0, amount1) = _addLiquidity(value, _tickLower, _tickUpper, _liquidity, _amount0Min, _amount1Min);
             positions.push(Position({
                 tickLower: _tickLower,
                 tickUpper: _tickUpper,
