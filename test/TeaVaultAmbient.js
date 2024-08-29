@@ -20,6 +20,16 @@ function loadEnvVarInt(env, errorMsg) {
     return parseInt(env);
 }
 
+// various ERC20 functions for supporting native token
+async function getDecimals(token) {
+    if (token.target == '0x0000000000000000000000000000000000000000') {
+        return 18;
+    }
+    else {
+        return token.decimals();
+    }
+}
+
 
 // setup ambient parameters
 const testRpc = loadEnvVar(process.env.AMBIENT_TEST_RPC, "No AMBIENT_TEST_RPC");
@@ -43,6 +53,11 @@ describe("TeaVaultAmbient", function () {
 
         // Contracts are deployed using the first signer/account by default
         const [ owner, manager, treasury, user ] = await ethers.getSigners();
+
+        // get ERC20 tokens
+        const MockToken = await ethers.getContractFactory("MockToken");
+        const token0 = MockToken.attach(testToken0);
+        const token1 = MockToken.attach(testToken1);
 
         const TeaVaultAmbient = await ethers.getContractFactory("TeaVaultAmbient");
         const ambientBeacon = await upgrades.deployBeacon(TeaVaultAmbient);
@@ -87,8 +102,8 @@ describe("TeaVaultAmbient", function () {
         const events = await teaVaultAmbientFactory.queryFilter("VaultDeployed");
         const vault = TeaVaultAmbient.attach(events[0].args[0]);
 
-        const token0 = testToken0;
-        const token1 = testToken1;
+        // const token0 = testToken0;
+        // const token1 = testToken1;
 
         return { owner, manager, treasury, user, vault, token0, token1 };
     }
@@ -100,6 +115,13 @@ describe("TeaVaultAmbient", function () {
             const poolInfo = await vault.getPoolInfo();
             expect(poolInfo[0]).to.equal(token0);
             expect(poolInfo[1]).to.equal(token1);
+        });
+
+        it("Should set the correct decimals", async function () {
+            const { vault, token0 } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+
+            const token0Decimals = await getDecimals(token0);
+            expect(await vault.decimals()).to.equal(token0Decimals + testDecimalOffset);
         });
     });
 });
