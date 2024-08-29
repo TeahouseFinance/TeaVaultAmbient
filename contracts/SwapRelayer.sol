@@ -27,6 +27,7 @@ contract SwapRelayer is ISwapRelayer {
         bool isSrcNative = _src.isNative();
         if (!isSrcNative) {
             _src.approve(_swapRouter, _amountIn);
+            _amountIn = 0;
         }
 
         (bool success, bytes memory returndata) = _swapRouter.call{value: _amountIn}(_data);
