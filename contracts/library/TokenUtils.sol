@@ -7,12 +7,18 @@ import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 library TokenUtils {
+    uint8 constant NATIVE_DECIMALS = 18;
+
     using SafeERC20 for ERC20Upgradeable;
 
     error NativeTransferFailed();
 
     function isNative(ERC20Upgradeable _token) internal pure returns (bool) {
         return address(_token) == address(0);
+    }
+
+    function getDecimals(ERC20Upgradeable _token) internal view returns (uint8) {
+        return isNative(_token) ? NATIVE_DECIMALS : _token.decimals();
     }
 
     function nonNativeApprove(ERC20Upgradeable _token, address _spender, uint256 _amount) internal {

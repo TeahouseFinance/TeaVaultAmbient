@@ -23,6 +23,7 @@ contract TeaVaultAmbientFactory is ITeaVaultAmbientFactory, Initializable, UUPSU
     address ambientQuery;
     TeaVaultAmbient.LpParamsConfig lpParamsConfig;
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }
@@ -31,7 +32,7 @@ contract TeaVaultAmbientFactory is ITeaVaultAmbientFactory, Initializable, UUPSU
 
     function initialize(
         address _owner,
-        address _initTeaVaultAmbientImpl,
+        address _beacon,
         address _ambientSwapDex,
         address _ambientImpact,
         address _ambientQuery,
@@ -40,7 +41,7 @@ contract TeaVaultAmbientFactory is ITeaVaultAmbientFactory, Initializable, UUPSU
         __UUPSUpgradeable_init();
         __Ownable_init(_owner);
 
-        vaultBeacon = address(new UpgradeableBeacon(_initTeaVaultAmbientImpl, _owner));
+        vaultBeacon = _beacon;
         swapRelayer = new SwapRelayer();
         ambientSwapDex = _ambientSwapDex;
         ambientImpact = _ambientImpact;

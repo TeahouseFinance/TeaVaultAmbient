@@ -21,6 +21,8 @@ import {ISwapRelayer} from "./interface/ISwapRelayer.sol";
 import {VaultUtils} from "./library/VaultUtils.sol";
 import {TokenUtils} from "./library/TokenUtils.sol";
 
+//import "hardhat/console.sol";
+
 contract TeaVaultAmbient is
     ITeaVaultAmbient,
     Initializable,
@@ -94,7 +96,7 @@ contract TeaVaultAmbient is
         (_token0, _token1) = _token0 > _token1 ? (_token1, _token0) : (_token0, _token1);
         if (_ambientQuery.queryPoolParams(_token0, _token1, _poolIdx).schema_ != 1) revert PoolNotInitialized();
 
-        DECIMALS = _decimalOffset + token0.decimals();
+        DECIMALS = _decimalOffset + token0.getDecimals();
         MAX_POSITION_LENGTH = 5;
         SECONDS_IN_A_YEAR = 365 * 24 * 60 * 60;
         DECIMALS_MULTIPLIER = 10 ** _decimalOffset;
@@ -102,9 +104,9 @@ contract TeaVaultAmbient is
         if (_feeCap >= FEE_MULTIPLIER) revert InvalidFeeCap();
         FEE_CAP = _feeCap; 
 
-        _assignManager(manager);
+        _assignManager(_manager);
         _setFeeConfig(_feeConfig);
-        
+       
         factory = ITeaVaultAmbientFactory(msg.sender);
         swapRelayer = _swapRelayer;
         ambientSwapDex = _ambientSwapDex;
@@ -206,8 +208,8 @@ contract TeaVaultAmbient is
         ERC20Upgradeable _token1 = token1;
         uint256 _poolIdx = poolIdx;
 
-        uint8 decimals0 = token0.decimals();
-        uint8 decimals1 = token1.decimals();
+        uint8 decimals0 = token0.getDecimals();
+        uint8 decimals1 = token1.getDecimals();
         ICrocQuery.Pool memory params = _ambientQuery.queryPoolParams(token0, token1, _poolIdx);
         uint16 feeRate = params.feeRate_;
         uint16 tickSize = params.tickSize_;
@@ -514,7 +516,7 @@ contract TeaVaultAmbient is
         (amount0, amount1) = _lpCall(
             _value,
             lpParamsConfig.callPath,
-            lpParamsConfig.burnCodeFixedInLiquidityUnits,
+            lpParamsConfig.mintCodeFixedInLiquidityUnits,
             _tickLower,
             _tickUpper,
             _liquidity.toUint128()
