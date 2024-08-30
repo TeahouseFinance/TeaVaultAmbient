@@ -3,6 +3,7 @@ const { anyValue } = require("@nomicfoundation/hardhat-chai-matchers/withArgs");
 const { expect } = require("chai");
 const { ethers, upgrades } = require("hardhat");
 
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 function loadEnvVar(env, errorMsg) {
     if (env == undefined) {
@@ -22,7 +23,7 @@ function loadEnvVarInt(env, errorMsg) {
 
 // various ERC20 functions for supporting native token
 async function getDecimals(token) {
-    if (token.target == '0x0000000000000000000000000000000000000000') {
+    if (token.target == ZERO_ADDRESS) {
         return 18;
     }
     else {
@@ -102,9 +103,6 @@ describe("TeaVaultAmbient", function () {
         const events = await teaVaultAmbientFactory.queryFilter("VaultDeployed");
         const vault = TeaVaultAmbient.attach(events[0].args[0]);
 
-        // const token0 = testToken0;
-        // const token1 = testToken1;
-
         return { owner, manager, treasury, user, vault, token0, token1 };
     }
 
@@ -112,9 +110,12 @@ describe("TeaVaultAmbient", function () {
         it("Should set the correct tokens", async function () {
             const { vault, token0, token1 } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
 
+            expect(await vault.assetToken0()).to.equal(token0.target);
+            expect(await vault.assetToken1()).to.equal(token1.target);
+
             const poolInfo = await vault.getPoolInfo();
-            expect(poolInfo[0]).to.equal(token0);
-            expect(poolInfo[1]).to.equal(token1);
+            expect(poolInfo[0]).to.equal(token0.target);
+            expect(poolInfo[1]).to.equal(token1.target);
         });
 
         it("Should set the correct decimals", async function () {
@@ -122,6 +123,96 @@ describe("TeaVaultAmbient", function () {
 
             const token0Decimals = await getDecimals(token0);
             expect(await vault.decimals()).to.equal(token0Decimals + testDecimalOffset);
+        });
+    });
+
+    describe("Owner functions", function() {
+        it("Should be able to set fees from owner", async function() {
+            const { owner, vault } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+
+            const feeConfig = {
+                treasury: owner.address,
+                entryFee: 1000,
+                exitFee: 2000,
+                performanceFee: 100000,
+                managementFee: 10000,
+            };
+
+            await vault.setFeeConfig(feeConfig);
+            const fees = await vault.feeConfig();
+
+            expect(feeConfig.treasury).to.equal(fees.treasury);
+            expect(feeConfig.entryFee).to.equal(fees.entryFee);
+            expect(feeConfig.exitFee).to.equal(fees.exitFee);
+            expect(feeConfig.performanceFee).to.equal(fees.performanceFee);
+            expect(feeConfig.managementFee).to.equal(fees.managementFee);
+        });
+
+        it("Should not be able to set incorrect fees", async function() {
+            const { owner, vault } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+
+            const feeConfig1 = {
+                treasury: owner.address,
+                entryFee: 500001,
+                exitFee: 500000,
+                performanceFee: 100000,
+                managementFee: 10000,
+            };
+
+            await expect(vault.setFeeConfig(feeConfig1))
+            .to.be.revertedWithCustomError(vault, "InvalidFeePercentage");
+
+            const feeConfig2 = {
+                treasury: owner.address,
+                entryFee: 1000,
+                exitFee: 2000,
+                performanceFee: 1000001,
+                managementFee: 10000,
+            };
+
+            await expect(vault.setFeeConfig(feeConfig2))
+            .to.be.revertedWithCustomError(vault, "InvalidFeePercentage");
+
+            const feeConfig3 = {
+                treasury: owner.address,
+                entryFee: 1000,
+                exitFee: 2000,
+                performanceFee: 100000,
+                managementFee: 1000001,
+            };
+
+            await expect(vault.setFeeConfig(feeConfig3))
+            .to.be.revertedWithCustomError(vault, "InvalidFeePercentage");
+        });
+
+        it("Should not be able to set fees from non-owner", async function() {
+            const { manager, vault } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+
+            const feeConfig = {
+                treasury: manager.address,
+                entryFee: 1000,
+                exitFee: 2000,
+                performanceFee: 100000,
+                managementFee: 10000,
+            }
+
+            await expect(vault.connect(manager).setFeeConfig(feeConfig))
+            .to.be.revertedWithCustomError(vault, "OwnableUnauthorizedAccount");
+        });
+
+        it("Should be able to assign manager from owner", async function() {
+            const { manager, vault } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+
+            await vault.assignManager(manager.address);
+            expect(await vault.manager()).to.equal(manager.address);
+        });
+
+        it("Should not be able to assign manager from non-owner", async function() {
+            const { manager, user, vault } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+
+            await expect(vault.connect(manager).assignManager(user.address))
+            .to.be.revertedWithCustomError(vault, "OwnableUnauthorizedAccount");
+            expect(await vault.manager()).to.equal(manager.address);
         });
     });
 });
