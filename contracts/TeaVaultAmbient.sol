@@ -21,8 +21,6 @@ import {ISwapRelayer} from "./interface/ISwapRelayer.sol";
 import {VaultUtils} from "./library/VaultUtils.sol";
 import {TokenUtils} from "./library/TokenUtils.sol";
 
-//import "hardhat/console.sol";
-
 contract TeaVaultAmbient is
     ITeaVaultAmbient,
     Initializable,
@@ -96,7 +94,7 @@ contract TeaVaultAmbient is
         (_token0, _token1) = _token0 > _token1 ? (_token1, _token0) : (_token0, _token1);
         if (_ambientQuery.queryPoolParams(_token0, _token1, _poolIdx).schema_ != 1) revert PoolNotInitialized();
 
-        DECIMALS = _decimalOffset + token0.getDecimals();
+        DECIMALS = _decimalOffset + token0.decimals();
         MAX_POSITION_LENGTH = 5;
         SECONDS_IN_A_YEAR = 365 * 24 * 60 * 60;
         DECIMALS_MULTIPLIER = 10 ** _decimalOffset;
@@ -104,9 +102,9 @@ contract TeaVaultAmbient is
         if (_feeCap >= FEE_MULTIPLIER) revert InvalidFeeCap();
         FEE_CAP = _feeCap; 
 
-        _assignManager(_manager);
+        _assignManager(manager);
         _setFeeConfig(_feeConfig);
-       
+        
         factory = ITeaVaultAmbientFactory(msg.sender);
         swapRelayer = _swapRelayer;
         ambientSwapDex = _ambientSwapDex;
@@ -208,8 +206,8 @@ contract TeaVaultAmbient is
         ERC20Upgradeable _token1 = token1;
         uint256 _poolIdx = poolIdx;
 
-        uint8 decimals0 = token0.getDecimals();
-        uint8 decimals1 = token1.getDecimals();
+        uint8 decimals0 = token0.decimals();
+        uint8 decimals1 = token1.decimals();
         ICrocQuery.Pool memory params = _ambientQuery.queryPoolParams(token0, token1, _poolIdx);
         uint16 feeRate = params.feeRate_;
         uint16 tickSize = params.tickSize_;
@@ -219,13 +217,12 @@ contract TeaVaultAmbient is
         return (_token0, _token1, decimals0, decimals1, feeRate, tickSize, sqrtPriceX64, tick);
     }
 
-    function _charge(ERC20Upgradeable _token, uint256 maxAmount) internal returns (uint256 chargedAmount) {
+    function _charge(ERC20Upgradeable _token, uint256 maxAmount) internal {
         if (_token.isNative()) {
-            chargedAmount = msg.value;
+            if (msg.value < maxAmount) revert InsufficientValue();
         }
         else {
             _token.safeTransferFrom(msg.sender, address(this), maxAmount);
-            chargedAmount = maxAmount;
         } 
     }
 
@@ -246,30 +243,19 @@ contract TeaVaultAmbient is
 
         if (totalShares == 0) {
             // vault is empty, default to 1:1 share to token0 ratio (offseted by _decimalOffset)
-            
-            if (isToken0Native) {
-                uint256 expectedAmount = _shares / DECIMALS_MULTIPLIER;
-                if (msg.value > expectedAmount) {
-                    depositedAmount0 = expectedAmount;
-                    // refund overpaid native token
-                    TokenUtils.safeNativeTransfer(msg.sender, msg.value - expectedAmount);
-                }
-                else {
-                    _shares = msg.value * DECIMALS_MULTIPLIER;
-                    depositedAmount0 = msg.value;
-                }
-            }
-            else {
-                depositedAmount0 = _shares / DECIMALS_MULTIPLIER;
-                _token0.safeTransferFrom(msg.sender, address(this), depositedAmount0);
+            depositedAmount0 = _shares / DECIMALS_MULTIPLIER;
+            _charge(_token0, depositedAmount0);
+
+            if (isToken0Native && msg.value > depositedAmount0) {
+                TokenUtils.safeNativeTransfer(msg.sender, msg.value - depositedAmount0);
             }
         }
         else {
             _collectAllSwapFee();
             uint256 token0BalanceOfVault = _token0.getBalance(address(this)) - msg.value;
             uint256 token1BalanceOfVault = _token1.getBalance(address(this)); 
-            _amount0Max = _charge(_token0, _amount0Max);
-            _amount1Max = _charge(_token0, _amount1Max);
+            _charge(_token0, _amount0Max);
+            _charge(_token1, _amount1Max);
             
             address _ambientSwapDex = address(ambientSwapDex);
             uint256 positionLength = positions.length;
@@ -516,7 +502,7 @@ contract TeaVaultAmbient is
         (amount0, amount1) = _lpCall(
             _value,
             lpParamsConfig.callPath,
-            lpParamsConfig.mintCodeFixedInLiquidityUnits,
+            lpParamsConfig.burnCodeFixedInLiquidityUnits,
             _tickLower,
             _tickUpper,
             _liquidity.toUint128()

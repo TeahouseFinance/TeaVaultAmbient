@@ -12,6 +12,7 @@ interface ITeaVaultAmbient {
     error InvalidFeePercentage();
     error PositionDoesNotExist();
     error InvalidShareAmount();
+    error InsufficientValue();
     error InvalidPriceSlippage(uint256 amount0, uint256 amount1);
     error PositionLengthExceedsLimit();
     error WorseRate(uint256 baselineAmount, uint256 receivedAmount);
@@ -128,8 +129,8 @@ interface ITeaVaultAmbient {
 
     /// @notice Mint shares and deposit token0 and token1
     /// @param shares Share amount to be mint
-    /// @param amount0Max Maximum token0 amount to be deposited
-    /// @param amount1Max Maximum token1 amount to be deposited
+    /// @param amount0Max Maximum token0 amount to be deposited, must be sufficient in msg.value or allowance
+    /// @param amount1Max Maximum token1 amount to be deposited, must be sufficient in allowance
     /// @return depositedAmount0 Deposited token0 amount
     /// @return depositedAmount1 Deposited token1 amount
     function deposit(
