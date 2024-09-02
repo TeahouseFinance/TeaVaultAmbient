@@ -247,10 +247,6 @@ contract TeaVaultAmbient is
             // vault is empty, default to 1:1 share to token0 ratio (offseted by _decimalOffset)
             depositedAmount0 = _shares / DECIMALS_MULTIPLIER;
             _charge(_token0, depositedAmount0);
-
-            if (isToken0Native && msg.value > depositedAmount0) {
-                TokenUtils.safeNativeTransfer(msg.sender, msg.value - depositedAmount0);
-            }
         }
         else {
             _collectAllSwapFee();
