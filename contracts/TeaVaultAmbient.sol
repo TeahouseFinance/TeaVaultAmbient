@@ -247,10 +247,6 @@ contract TeaVaultAmbient is
             // vault is empty, default to 1:1 share to token0 ratio (offseted by _decimalOffset)
             depositedAmount0 = _shares / DECIMALS_MULTIPLIER;
             _charge(_token0, depositedAmount0);
-
-            if (isToken0Native && msg.value > depositedAmount0) {
-                TokenUtils.safeNativeTransfer(msg.sender, msg.value - depositedAmount0);
-            }
         }
         else {
             _collectAllSwapFee();
@@ -397,7 +393,7 @@ contract TeaVaultAmbient is
         uint256 _amount0Min,
         uint256 _amount1Min,
         uint64 _deadline
-    ) external override checkDeadline(_deadline) onlyManager returns (
+    ) external override nonReentrant checkDeadline(_deadline) onlyManager returns (
         uint256 amount0,
         uint256 amount1
     ) {
@@ -446,7 +442,7 @@ contract TeaVaultAmbient is
         uint256 _amount0Min,
         uint256 _amount1Min,
         uint64 _deadline
-    ) external override checkDeadline(_deadline) onlyManager returns (
+    ) external override nonReentrant checkDeadline(_deadline) onlyManager returns (
         uint256 amount0,
         uint256 amount1
     ) {
@@ -583,7 +579,7 @@ contract TeaVaultAmbient is
     function collectPositionSwapFee(
         int24 _tickLower,
         int24 _tickUpper
-    ) external override returns (
+    ) external nonReentrant override returns (
         uint256 amount0,
         uint256 amount1
     ) {
@@ -600,7 +596,7 @@ contract TeaVaultAmbient is
     }
 
     /// @inheritdoc ITeaVaultAmbient
-    function collectAllSwapFee() external override returns (uint256 amount0, uint256 amount1) {
+    function collectAllSwapFee() external nonReentrant override returns (uint256 amount0, uint256 amount1) {
         return _collectAllSwapFee();
     }
     
