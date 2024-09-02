@@ -397,7 +397,7 @@ contract TeaVaultAmbient is
         uint256 _amount0Min,
         uint256 _amount1Min,
         uint64 _deadline
-    ) external override checkDeadline(_deadline) onlyManager returns (
+    ) external override nonReentrant checkDeadline(_deadline) onlyManager returns (
         uint256 amount0,
         uint256 amount1
     ) {
@@ -446,7 +446,7 @@ contract TeaVaultAmbient is
         uint256 _amount0Min,
         uint256 _amount1Min,
         uint64 _deadline
-    ) external override checkDeadline(_deadline) onlyManager returns (
+    ) external override nonReentrant checkDeadline(_deadline) onlyManager returns (
         uint256 amount0,
         uint256 amount1
     ) {
@@ -583,7 +583,7 @@ contract TeaVaultAmbient is
     function collectPositionSwapFee(
         int24 _tickLower,
         int24 _tickUpper
-    ) external override returns (
+    ) external nonReentrant override returns (
         uint256 amount0,
         uint256 amount1
     ) {
@@ -600,7 +600,7 @@ contract TeaVaultAmbient is
     }
 
     /// @inheritdoc ITeaVaultAmbient
-    function collectAllSwapFee() external override returns (uint256 amount0, uint256 amount1) {
+    function collectAllSwapFee() external nonReentrant override returns (uint256 amount0, uint256 amount1) {
         return _collectAllSwapFee();
     }
     

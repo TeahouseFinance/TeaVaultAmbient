@@ -330,4 +330,5 @@ interface ITeaVaultAmbient {
     /// @notice Get all open positions
     /// @return results Array of all open positions
     function getAllPositions() external view returns (Position[] memory results);
+    
 }
