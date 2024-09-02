@@ -240,10 +240,10 @@ describe("TeaVaultAmbient", function () {
             // set fees
             const feeConfig = {
                 treasury: treasury.address,
-                entryFee: 1000,
-                exitFee: 2000,
-                performanceFee: 100000,
-                managementFee: 10000,
+                entryFee: 1000n,
+                exitFee: 2000n,
+                performanceFee: 100000n,
+                managementFee: 10000n,
             }
 
             await vault.setFeeConfig(feeConfig);
@@ -251,23 +251,28 @@ describe("TeaVaultAmbient", function () {
             // deposit
             const token0Decimals = await getDecimals(token0);
             const vaultDecimals = await getDecimals(vault);
-            await approveToken(token0, vault, ethers.parseUnits("10000", token0Decimals));
-            const shares = ethers.parseUnits("100", vaultDecimals);
-            const token0Amount = ethers.parseUnits("100", token0Decimals);
+            await approveToken(token0, vault, ethers.parseUnits("100", token0Decimals));
+            const shares = ethers.parseUnits("1", vaultDecimals);
+            const token0Amount = ethers.parseUnits("1", token0Decimals);
+            const token0AmountWithFee = token0Amount * (1000000n + feeConfig.entryFee) / 1000000n
 
-            // let token0Before = await getTokenBalance(token0, user);
-            // if (token0 == ZERO_ADDRESS) {
-            //     // deposit native token
-            //     expect(await vault.connect(user).deposit(shares, UINT256_MAX, UINT256_MAX, { value: token0Amount }))
-            //     .to.changeTokenBalance(vault, user, shares);    
-            // }
-            // else {
-            //     // deposit ERC20 token
-            //     expect(await vault.connect(user).deposit(shares, UINT256_MAX, UINT256_MAX))
-            //     .to.changeTokenBalance(vault, user, shares);    
-            // }
-            // let token0After = await getBalance(token0, user);
-            // expect(token0Before - token0After).to.equal(token0Amount);
+            let token0Before = await getTokenBalance(token0, user);
+            let gasFee = 0n;
+            if (token0.target == ZERO_ADDRESS) {
+                // deposit native token
+                let tx;
+                expect(tx = await vault.connect(user).deposit(shares, token0AmountWithFee, 0n, { value: token0AmountWithFee }))
+                .to.changeTokenBalance(vault, user, shares);
+                const receipt = await ethers.provider.getTransactionReceipt(tx.hash);
+                gasFee = tx.gasPrice * receipt.gasUsed;
+            }
+            else {
+                // deposit ERC20 token
+                expect(await vault.connect(user).deposit(shares, token0AmountWithFee, 0n))
+                .to.changeTokenBalance(vault, user, shares);    
+            }
+            let token0After = await getTokenBalance(token0, user);
+            expect(token0Before - token0After).to.equal(token0AmountWithFee + gasFee);
 
             // let expectedAmount0 = ethers.BigNumber.from(token0Amount);
             // const entryFeeAmount0 = expectedAmount0.mul(feeConfig.entryFee).div("1000000");
