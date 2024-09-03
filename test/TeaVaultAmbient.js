@@ -267,7 +267,7 @@ describe("TeaVaultAmbient", function () {
 
     describe("User functions with native token", function() {        
         it("Should be able to deposit and withdraw from user", async function() {
-            const { owner, treasury, user, vaultNative, token1Native } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+            const { treasury, user, vaultNative } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
 
             // set fees
             const feeConfig = {
@@ -285,7 +285,6 @@ describe("TeaVaultAmbient", function () {
             // deposit
             const token0Decimals = NATIVE_DECIMALS;
             const vaultDecimals = await getDecimals(vaultNative);
-            //await approveToken(token0, vault, ethers.parseUnits("100", token0Decimals));
             const shares = ethers.parseUnits("1", vaultDecimals);
             const token0Amount = ethers.parseUnits("1", token0Decimals);
             const token0EntryFee = token0Amount * feeConfig.entryFee / feeMultiplier;
@@ -333,39 +332,51 @@ describe("TeaVaultAmbient", function () {
             expect(await vaultNative.balanceOf(treasury.address)).to.equal(exitFeeShares + managementFee); // treasury received exitFeeShares and managementFee of share
         });
 
-        // it("Should not be able to deposit and withdraw incorrect amounts", async function() {
-        //     const { user, vault, token0 } = await helpers.loadFixture(deployTeaVaultV3Pair);
+        it("Should not be able to deposit and withdraw incorrect amounts", async function() {
+            const { user, vaultNative } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
 
-        //     // deposit without enough allowance
-        //     await token0.connect(user).approve(vault.address, "1000" + "0".repeat(await token0.decimals()));
-        //     const shares = "10000" + "0".repeat(await vault.decimals());
-        //     await expect(vault.connect(user).deposit(shares, UINT256_MAX, UINT256_MAX)).to.be.revertedWith("");
+            // deposit without enough value
+            const token0Decimals = NATIVE_DECIMALS;
+            const vaultDecimals = await getDecimals(vaultNative);
+            const shares = ethers.parseUnits("1", vaultDecimals);
+            const token0Amount = ethers.parseUnits("1", token0Decimals);
 
-        //     const smallerShares = "100" + "0".repeat(await vault.decimals());
-        //     await vault.connect(user).deposit(smallerShares, UINT256_MAX, UINT256_MAX);
+            await expect(vaultNative.connect(user).deposit(shares, token0Amount, 0), { value: token0Amount - 100n })
+            .to.be.revertedWithCustomError(vaultNative, "InsufficientValue");
 
-        //     // withdraw more than owned shares
-        //     await expect(vault.connect(user).withdraw(shares, 0, 0)).to.be.revertedWith("");
-        // });
+            await vaultNative.connect(user).deposit(shares, token0Amount, 0, { value: token0Amount });
 
-        // it("Should revert with slippage checks when depositing", async function() {
-        //     const { user, vault, token0 } = await helpers.loadFixture(deployTeaVaultV3Pair);
+            // withdraw more than owned shares
+            await expect(vaultNative.connect(user).withdraw(shares * 2n, 0, 0))
+            .to.be.revertedWithCustomError(vaultNative, "ERC20InsufficientBalance");
+        });
 
-        //     // deposit with slippage check
-        //     await token0.connect(user).approve(vault.address, "10000" + "0".repeat(await token0.decimals()));
-        //     const shares = "10000" + "0".repeat(await vault.decimals());
-        //     await expect(vault.connect(user).deposit(shares, "100", "100")).to.be.revertedWith("");
-        // });
+        it("Should revert with slippage checks when depositing", async function() {
+            const { user, vaultNative } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
 
-        // it("Should revert with slippage checks when withdrawing", async function() {
-        //     const { user, vault, token0 } = await helpers.loadFixture(deployTeaVaultV3Pair);
+            // deposit with slippage check
+            const token0Decimals = NATIVE_DECIMALS;
+            const vaultDecimals = await getDecimals(vaultNative);
+            const shares = ethers.parseUnits("1", vaultDecimals);
+            const token0Amount = ethers.parseUnits("1", token0Decimals);
 
-        //     await token0.connect(user).approve(vault.address, "1000" + "0".repeat(await token0.decimals()));
-        //     const shares = "100" + "0".repeat(await vault.decimals());
-        //     await vault.connect(user).deposit(shares, UINT256_MAX, UINT256_MAX);
+            await expect(vaultNative.connect(user).deposit(shares, token0Amount - 100n, 0n, { value: token0Amount }))
+            .to.be.revertedWithCustomError(vaultNative, "InvalidPriceSlippage");
+        });
 
-        //     // withdraw with slippage check
-        //     await expect(vault.connect(user).withdraw(shares, "100", "100")).to.be.revertedWith("");
-        // });
+        it("Should revert with slippage checks when withdrawing", async function() {
+            const { user, vaultNative } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+
+            const token0Decimals = NATIVE_DECIMALS;
+            const vaultDecimals = await getDecimals(vaultNative);
+            const shares = ethers.parseUnits("1", vaultDecimals);
+            const token0Amount = ethers.parseUnits("1", token0Decimals);
+
+            await vaultNative.connect(user).deposit(shares, token0Amount, 0, { value: token0Amount });
+
+            // withdraw with slippage check
+            await expect(vaultNative.connect(user).withdraw(shares, token0Amount + 100n, 0n))
+            .to.be.revertedWithCustomError(vaultNative, "InvalidPriceSlippage");
+        });
     });
 });
