@@ -25,31 +25,6 @@ function loadEnvVarInt(env, errorMsg) {
     return parseInt(env);
 }
 
-// various ERC20 functions for supporting native token
-async function getDecimals(token) {
-    if (token.target == ZERO_ADDRESS) {
-        return 18;
-    }
-    else {
-        return token.decimals();
-    }
-}
-
-async function approveToken(token, target, amount) {
-    if (token.target != ZERO_ADDRESS) {
-        return token.approve(target, amount);
-    }
-}
-
-async function getTokenBalance(token, target) {
-    if (token.target == ZERO_ADDRESS) {
-        return ethers.provider.getBalance(target);
-    }
-    else {
-        return token.balanceOf(target);
-    }
-}
-
 
 // setup ambient parameters
 const testRpc = loadEnvVar(process.env.AMBIENT_TEST_RPC, "No AMBIENT_TEST_RPC");
@@ -65,6 +40,8 @@ const testToken1Native = loadEnvVar(process.env.AMBIENT_TEST_TOKEN1_NATIVE, "No 
 const testDecimalOffsetNative = loadEnvVarInt(process.env.AMBIENT_TEST_DECIMAL_OFFSET_NATIVE, "No AMBIENT_TEST_DECIMAL_OFFSET_NATIVE");
 const testToken0ERC20 = loadEnvVar(process.env.AMBIENT_TEST_TOKEN0_ERC20, "No AMBIENT_TEST_TOKEN0_ERC20");
 const testToken1ERC20 = loadEnvVar(process.env.AMBIENT_TEST_TOKEN1_ERC20, "No AMBIENT_TEST_TOKEN1_ERC20");
+const testToken0ERC20Whale = loadEnvVar(process.env.AMBIENT_TEST_TOKEN0_ERC20_WHALE, "No AMBIENT_TEST_TOKEN0_ERC20_WHALE");
+const testToken1ERC20Whale = loadEnvVar(process.env.AMBIENT_TEST_TOKEN1_ERC20_WHALE, "No AMBIENT_TEST_TOKEN1_ERC20_WHALE");
 const testDecimalOffsetERC20 = loadEnvVarInt(process.env.AMBIENT_TEST_DECIMAL_OFFSET_ERC20, "No AMBIENT_TEST_DECIMAL_OFFSET_ERC20");
 const testPoolIndex = loadEnvVarInt(process.env.AMBIENT_TEST_POOL_INDEX, "No AMBIENT_TEST_POOL_INDEX");
 
@@ -83,6 +60,18 @@ describe("TeaVaultAmbient", function () {
         const token0ERC20 = MockToken.attach(testToken0ERC20);
         const token1ERC20 = MockToken.attach(testToken1ERC20);
 
+        // get tokens from whale
+        await helpers.impersonateAccount(testToken0ERC20Whale);
+        const token0Whale = await ethers.getSigner(testToken0ERC20Whale);
+        await helpers.setBalance(token0Whale.address, ethers.parseEther("100"));  // assign some eth to the whale in case it's a contract and not accepting eth
+        await token0ERC20.connect(token0Whale).transfer(user.address, ethers.parseUnits("100000", await token0ERC20.decimals()));
+
+        await helpers.impersonateAccount(testToken1ERC20Whale);
+        const token1Whale = await ethers.getSigner(testToken1ERC20Whale);
+        await helpers.setBalance(token1Whale.address, ethers.parseEther("100"));  // assign some eth to the whale in case it's a contract and not accepting eth
+        await token1ERC20.connect(token1Whale).transfer(user.address, ethers.parseUnits("100000", await token1ERC20.decimals()));
+
+        // deploy vault
         const TeaVaultAmbient = await ethers.getContractFactory("TeaVaultAmbient");
         const ambientBeacon = await upgrades.deployBeacon(TeaVaultAmbient);
 
@@ -124,7 +113,7 @@ describe("TeaVaultAmbient", function () {
             },
         );
 
-        let events = await teaVaultAmbientFactory.queryFilter("VaultDeployed", txNative.block, txNative.block);
+        let events = await teaVaultAmbientFactory.queryFilter("VaultDeployed", txNative.blockNumber, txNative.blockNumber);
         const vaultNative = TeaVaultAmbient.attach(events[0].args[0]);
 
         // create ERC20 pool
@@ -147,7 +136,7 @@ describe("TeaVaultAmbient", function () {
             },
         );
 
-        events = await teaVaultAmbientFactory.queryFilter("VaultDeployed", txERC20.block, txERC20.block);
+        events = await teaVaultAmbientFactory.queryFilter("VaultDeployed", txERC20.blockNumber, txERC20.blockNumber);
         const vaultERC20 = TeaVaultAmbient.attach(events[0].args[0]);
 
         return { owner, manager, treasury, user, vaultNative, token1Native, vaultERC20, token0ERC20, token1ERC20 };
@@ -170,7 +159,7 @@ describe("TeaVaultAmbient", function () {
 
             expect(await vaultNative.decimals()).to.equal(NATIVE_DECIMALS);
 
-            const token0Decimals = await getDecimals(token0ERC20);
+            const token0Decimals = await token0ERC20.decimals();
             expect(await vaultERC20.decimals()).to.equal(token0Decimals + BigInt(testDecimalOffsetERC20));
         });
     });
@@ -284,7 +273,7 @@ describe("TeaVaultAmbient", function () {
 
             // deposit
             const token0Decimals = NATIVE_DECIMALS;
-            const vaultDecimals = await getDecimals(vaultNative);
+            const vaultDecimals = await vaultNative.decimals();
             const shares = ethers.parseUnits("1", vaultDecimals);
             const token0Amount = ethers.parseUnits("1", token0Decimals);
             const token0EntryFee = token0Amount * feeConfig.entryFee / feeMultiplier;
@@ -327,48 +316,52 @@ describe("TeaVaultAmbient", function () {
             expect(totalSupply).to.equal(managementFee + exitFeeShares);    // remaining share tokens
 
             expectedAmount0 = token0Amount * (shares - exitFeeShares) / (shares + managementFee);
-            //expectedAmount0 -= expectedAmount0 * feeConfig.exitFee / feeMultiplier;
             expect(token0After - token0Before).to.be.closeTo(expectedAmount0 - gasFee, 100); // user received expectedAmount0 of token0
             expect(await vaultNative.balanceOf(treasury.address)).to.equal(exitFeeShares + managementFee); // treasury received exitFeeShares and managementFee of share
         });
 
         it("Should not be able to deposit and withdraw incorrect amounts", async function() {
-            const { user, vaultNative } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+            const { user, treasury, vaultNative } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+
+            // set fees
+            const feeConfig = {
+                treasury: treasury.address,
+                entryFee: 1000n,
+                exitFee: 2000n,
+                performanceFee: 100000n,
+                managementFee: 10000n,
+            }
+
+            await vaultNative.setFeeConfig(feeConfig);
+
+            const feeMultiplier = await vaultNative.FEE_MULTIPLIER();
 
             // deposit without enough value
             const token0Decimals = NATIVE_DECIMALS;
-            const vaultDecimals = await getDecimals(vaultNative);
+            const vaultDecimals = await vaultNative.decimals();
             const shares = ethers.parseUnits("1", vaultDecimals);
             const token0Amount = ethers.parseUnits("1", token0Decimals);
+            const token0EntryFee = token0Amount * feeConfig.entryFee / feeMultiplier;
+            const token0AmountWithFee = token0Amount + token0EntryFee;
 
-            await expect(vaultNative.connect(user).deposit(shares, token0Amount, 0), { value: token0Amount - 100n })
+            await expect(vaultNative.connect(user).deposit(shares, token0AmountWithFee, 0), { value: token0Amount })
             .to.be.revertedWithCustomError(vaultNative, "InsufficientValue");
 
-            await vaultNative.connect(user).deposit(shares, token0Amount, 0, { value: token0Amount });
+            await expect(vaultNative.connect(user).deposit(shares, token0Amount, 0n, { value: token0AmountWithFee }))
+            .to.be.revertedWithCustomError(vaultNative, "InvalidPriceSlippage");
+
+            await vaultNative.connect(user).deposit(shares, token0AmountWithFee, 0, { value: token0AmountWithFee });
 
             // withdraw more than owned shares
             await expect(vaultNative.connect(user).withdraw(shares * 2n, 0, 0))
             .to.be.revertedWithCustomError(vaultNative, "ERC20InsufficientBalance");
         });
 
-        it("Should revert with slippage checks when depositing", async function() {
-            const { user, vaultNative } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
-
-            // deposit with slippage check
-            const token0Decimals = NATIVE_DECIMALS;
-            const vaultDecimals = await getDecimals(vaultNative);
-            const shares = ethers.parseUnits("1", vaultDecimals);
-            const token0Amount = ethers.parseUnits("1", token0Decimals);
-
-            await expect(vaultNative.connect(user).deposit(shares, token0Amount - 100n, 0n, { value: token0Amount }))
-            .to.be.revertedWithCustomError(vaultNative, "InvalidPriceSlippage");
-        });
-
         it("Should revert with slippage checks when withdrawing", async function() {
             const { user, vaultNative } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
 
             const token0Decimals = NATIVE_DECIMALS;
-            const vaultDecimals = await getDecimals(vaultNative);
+            const vaultDecimals = await vaultNative.decimals();
             const shares = ethers.parseUnits("1", vaultDecimals);
             const token0Amount = ethers.parseUnits("1", token0Decimals);
 
@@ -379,4 +372,124 @@ describe("TeaVaultAmbient", function () {
             .to.be.revertedWithCustomError(vaultNative, "InvalidPriceSlippage");
         });
     });
+
+    describe("User functions with ERC20 tokens", function() {        
+        it("Should be able to deposit and withdraw from user", async function() {
+            const { treasury, user, vaultERC20, token0ERC20 } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+
+            // set fees
+            const feeConfig = {
+                treasury: treasury.address,
+                entryFee: 1000n,
+                exitFee: 2000n,
+                performanceFee: 100000n,
+                managementFee: 10000n,
+            }
+
+            await vaultERC20.setFeeConfig(feeConfig);
+
+            const feeMultiplier = await vaultERC20.FEE_MULTIPLIER();
+
+            // deposit
+            const token0Decimals = await token0ERC20.decimals();
+            const vaultDecimals = await vaultERC20.decimals();
+            const shares = ethers.parseUnits("1", vaultDecimals);
+            const token0Amount = ethers.parseUnits("1", token0Decimals);
+            const token0EntryFee = token0Amount * feeConfig.entryFee / feeMultiplier;
+            const token0AmountWithFee = token0Amount + token0EntryFee;
+
+            let token0Before = await token0ERC20.balanceOf(user);
+            let treasureBefore = await token0ERC20.balanceOf(treasury);
+            
+            // deposit native token
+            await token0ERC20.connect(user).approve(vaultERC20, token0AmountWithFee);
+            expect(await vaultERC20.connect(user).deposit(shares, token0AmountWithFee, 0n))
+            .to.changeTokenBalance(vaultERC20, user, shares);
+            let token0After = await token0ERC20.balanceOf(user);
+            expect(token0Before - token0After).to.equal(token0AmountWithFee);
+
+            expect(await token0ERC20.balanceOf(vaultERC20)).to.equal(token0Amount);    // vault received amount0
+            let treasureAfter = await token0ERC20.balanceOf(treasury);
+            expect(treasureAfter - treasureBefore).to.equal(token0EntryFee);        // treasury received entry fee
+
+            const depositTime = await vaultERC20.lastCollectManagementFee();
+
+            // withdraw
+            token0Before = await token0ERC20.balanceOf(user);
+            expect( await vaultERC20.connect(user).withdraw(shares, 0, 0))
+            .to.changeTokenBalance(vaultERC20, user, -shares);
+            token0After = await token0ERC20.balanceOf(user);
+
+            const withdrawTime = await vaultERC20.lastCollectManagementFee();
+            const managementFeeTimeDiff = feeConfig.managementFee * (withdrawTime - depositTime);
+            const secondsInAYear = await vaultERC20.SECONDS_IN_A_YEAR();
+            const denominator = feeMultiplier * secondsInAYear - managementFeeTimeDiff;
+            const managementFee = (shares * managementFeeTimeDiff + denominator - 1n) / denominator;    // shares in management fee
+
+            const exitFeeShares = shares * feeConfig.exitFee / feeMultiplier;
+            const totalSupply = await vaultERC20.totalSupply();
+            expect(totalSupply).to.equal(managementFee + exitFeeShares);    // remaining share tokens
+
+            expectedAmount0 = token0Amount * (shares - exitFeeShares) / (shares + managementFee);
+            expect(token0After - token0Before).to.be.closeTo(expectedAmount0, 100); // user received expectedAmount0 of token0
+            expect(await vaultERC20.balanceOf(treasury.address)).to.equal(exitFeeShares + managementFee); // treasury received exitFeeShares and managementFee of share
+        });
+
+        it("Should not be able to deposit and withdraw incorrect amounts", async function() {
+            const { user, treasury, vaultERC20, token0ERC20 } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+
+            // set fees
+            const feeConfig = {
+                treasury: treasury.address,
+                entryFee: 1000n,
+                exitFee: 2000n,
+                performanceFee: 100000n,
+                managementFee: 10000n,
+            }
+
+            await vaultERC20.setFeeConfig(feeConfig);
+
+            const feeMultiplier = await vaultERC20.FEE_MULTIPLIER();
+
+            // deposit without enough value
+            const token0Decimals = await token0ERC20.decimals();
+            const vaultDecimals = await vaultERC20.decimals();
+            const shares = ethers.parseUnits("1", vaultDecimals);
+            const token0Amount = ethers.parseUnits("1", token0Decimals);
+            const token0EntryFee = token0Amount * feeConfig.entryFee / feeMultiplier;
+            const token0AmountWithFee = token0Amount + token0EntryFee;
+            
+            await token0ERC20.connect(user).approve(vaultERC20, token0Amount);
+            await expect(vaultERC20.connect(user).deposit(shares, token0AmountWithFee, 0))
+            .to.be.reverted;    // likely to be reverted with ERC20 token's insufficient allowance
+
+            await token0ERC20.connect(user).approve(vaultERC20, token0Amount);
+            await expect(vaultERC20.connect(user).deposit(shares, token0Amount, 0))
+            .to.be.revertedWithCustomError(vaultERC20, "InvalidPriceSlippage");            
+
+            await token0ERC20.connect(user).approve(vaultERC20, 0n);
+            await token0ERC20.connect(user).approve(vaultERC20, token0AmountWithFee);
+            await vaultERC20.connect(user).deposit(shares, token0AmountWithFee, 0);
+
+            // withdraw more than owned shares
+            await expect(vaultERC20.connect(user).withdraw(shares * 2n, 0, 0))
+            .to.be.revertedWithCustomError(vaultERC20, "ERC20InsufficientBalance");
+        });
+
+        it("Should revert with slippage checks when withdrawing", async function() {
+            const { user, vaultERC20, token0ERC20 } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+
+            const token0Decimals = await token0ERC20.decimals();
+            const vaultDecimals = await vaultERC20.decimals();
+            const shares = ethers.parseUnits("1", vaultDecimals);
+            const token0Amount = ethers.parseUnits("1", token0Decimals);
+
+            await token0ERC20.connect(user).approve(vaultERC20, token0Amount);
+            await vaultERC20.connect(user).deposit(shares, token0Amount, 0);
+
+            // withdraw with slippage check
+            await expect(vaultERC20.connect(user).withdraw(shares, token0Amount + 100n, 0n))
+            .to.be.revertedWithCustomError(vaultERC20, "InvalidPriceSlippage");
+        });
+    });    
 });

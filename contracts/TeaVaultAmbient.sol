@@ -246,7 +246,7 @@ contract TeaVaultAmbient is
         if (totalShares == 0) {
             // vault is empty, default to 1:1 share to token0 ratio (offseted by _decimalOffset)
             depositedAmount0 = _shares / DECIMALS_MULTIPLIER;
-            _charge(_token0, depositedAmount0);
+            _charge(_token0, _amount0Max);
         }
         else {
             _collectAllSwapFee();
