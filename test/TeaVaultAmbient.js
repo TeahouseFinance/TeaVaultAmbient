@@ -280,52 +280,57 @@ describe("TeaVaultAmbient", function () {
 
             await vaultNative.setFeeConfig(feeConfig);
 
+            const feeMultiplier = await vaultNative.FEE_MULTIPLIER();
+
             // deposit
             const token0Decimals = NATIVE_DECIMALS;
             const vaultDecimals = await getDecimals(vaultNative);
             //await approveToken(token0, vault, ethers.parseUnits("100", token0Decimals));
             const shares = ethers.parseUnits("1", vaultDecimals);
             const token0Amount = ethers.parseUnits("1", token0Decimals);
-            const token0AmountWithFee = token0Amount * (1000000n + feeConfig.entryFee) / 1000000n
+            const token0EntryFee = token0Amount * feeConfig.entryFee / feeMultiplier;
+            const token0AmountWithFee = token0Amount + token0EntryFee;
 
             let token0Before = await ethers.provider.getBalance(user);
-            let gasFee = 0n;
+            let treasureBefore = await ethers.provider.getBalance(treasury);
+            
             // deposit native token
             let tx;
             expect(tx = await vaultNative.connect(user).deposit(shares, token0AmountWithFee, 0n, { value: token0AmountWithFee }))
             .to.changeTokenBalance(vaultNative, user, shares);
-            const receipt = await ethers.provider.getTransactionReceipt(tx.hash);
-            gasFee = tx.gasPrice * receipt.gasUsed;
+            let receipt = await ethers.provider.getTransactionReceipt(tx.hash);
+            let gasFee = tx.gasPrice * receipt.gasUsed;
             let token0After = await ethers.provider.getBalance(user);
             expect(token0Before - token0After).to.equal(token0AmountWithFee + gasFee);
 
-            // let expectedAmount0 = ethers.BigNumber.from(token0Amount);
-            // const entryFeeAmount0 = expectedAmount0.mul(feeConfig.entryFee).div("1000000");
-            // expectedAmount0 = expectedAmount0.add(entryFeeAmount0);
-            // expect(token0Before.sub(token0After)).to.equal(expectedAmount0); // user spent expectedAmount0 of token0
-            // expect(await token0.balanceOf(owner.address)).to.equal(entryFeeAmount0); // vault received entryFeeAmount0 of token0
-            // const depositTime = await vault.lastCollectManagementFee();
+            expect(await ethers.provider.getBalance(vaultNative.target)).to.equal(token0Amount);    // vault received amount0
+            let treasureAfter = await ethers.provider.getBalance(treasury);
+            expect(treasureAfter - treasureBefore).to.equal(token0EntryFee);        // treasury received entry fee
 
-            // // withdraw
-            // token0Before = await token0.balanceOf(user.address);
-            // await vault.connect(user).withdraw(shares, 0, 0);
-            // expect(await vault.balanceOf(user.address)).to.equal(0);
-            // token0After = await token0.balanceOf(user.address);
+            const depositTime = await vaultNative.lastCollectManagementFee();
 
-            // const withdrawTime = await vault.lastCollectManagementFee();
-            // const managementFeeTimeDiff = feeConfig.managementFee * (withdrawTime - depositTime);
-            // const feeMultiplier = await vault.FEE_MULTIPLIER();
-            // const secondsInAYear = await vault.SECONDS_IN_A_YEAR();
-            // const denominator = feeMultiplier * secondsInAYear - managementFeeTimeDiff;
-            // const managementFee = ethers.BigNumber.from(shares).mul(managementFeeTimeDiff).add(denominator - 1).div(denominator);
+            // withdraw
+            token0Before = await ethers.provider.getBalance(user);
+            expect(tx = await vaultNative.connect(user).withdraw(shares, 0, 0))
+            .to.changeTokenBalance(vaultNative, user, -shares);
+            token0After = await ethers.provider.getBalance(user);
+            receipt = await ethers.provider.getTransactionReceipt(tx.hash);
+            gasFee = tx.gasPrice * receipt.gasUsed;
 
-            // const totalSupply = await vault.totalSupply();
-            // expectedAmount0 = ethers.BigNumber.from(token0Amount).mul(totalSupply.sub(managementFee)).div(totalSupply);
-            // const exitFeeAmount0 = expectedAmount0.mul(feeConfig.exitFee).div("1000000");
-            // const exitFeeShares = ethers.BigNumber.from(shares).mul(feeConfig.exitFee).div("1000000");
-            // expectedAmount0 = expectedAmount0.sub(exitFeeAmount0);
-            // expect(token0After.sub(token0Before)).to.be.closeTo(expectedAmount0, 100); // user received expectedAmount0 of token0
-            // expect(await vault.balanceOf(owner.address)).to.equal(exitFeeShares.add(managementFee)); // vault received exitFeeShares and managementFee of share
+            const withdrawTime = await vaultNative.lastCollectManagementFee();
+            const managementFeeTimeDiff = feeConfig.managementFee * (withdrawTime - depositTime);
+            const secondsInAYear = await vaultNative.SECONDS_IN_A_YEAR();
+            const denominator = feeMultiplier * secondsInAYear - managementFeeTimeDiff;
+            const managementFee = (shares * managementFeeTimeDiff + denominator - 1n) / denominator;    // shares in management fee
+
+            const exitFeeShares = shares * feeConfig.exitFee / feeMultiplier;
+            const totalSupply = await vaultNative.totalSupply();
+            expect(totalSupply).to.equal(managementFee + exitFeeShares);    // remaining share tokens
+
+            expectedAmount0 = token0Amount * (shares - exitFeeShares) / (shares + managementFee);
+            //expectedAmount0 -= expectedAmount0 * feeConfig.exitFee / feeMultiplier;
+            expect(token0After - token0Before).to.be.closeTo(expectedAmount0 - gasFee, 100); // user received expectedAmount0 of token0
+            expect(await vaultNative.balanceOf(treasury.address)).to.equal(exitFeeShares + managementFee); // treasury received exitFeeShares and managementFee of share
         });
 
         // it("Should not be able to deposit and withdraw incorrect amounts", async function() {
