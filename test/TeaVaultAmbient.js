@@ -4,6 +4,8 @@ const { expect } = require("chai");
 const { ethers, upgrades } = require("hardhat");
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+const NATIVE_ADDRESS = ZERO_ADDRESS;
+const NATIVE_DECIMALS = 18;
 const UINT256_MAX = '0x' + 'f'.repeat(64);
 const UINT64_MAX = '0x' + 'f'.repeat(16);
 
@@ -59,9 +61,11 @@ const testCallPath = loadEnvVarInt(process.env.AMBIENT_TEST_CALL_PATH, "No AMBIE
 const testMintCode = loadEnvVarInt(process.env.AMBIENT_TEST_MINT_CODE, "No AMBIENT_TEST_MINT_CODE");
 const testBurnCode = loadEnvVarInt(process.env.AMBIENT_TEST_BURN_CODE, "No AMBIENT_TEST_BURN_CODE");
 const testHarvestCode = loadEnvVarInt(process.env.AMBIENT_TEST_HARVEST_CODE, "No AMBIENT_TEST_HARVEST_CODE");
-const testToken0 = loadEnvVar(process.env.AMBIENT_TEST_TOKEN0, "No AMBIENT_TEST_TOKEN0");
-const testToken1 = loadEnvVar(process.env.AMBIENT_TEST_TOKEN1, "No AMBIENT_TEST_TOKEN1");
-const testDecimalOffset = loadEnvVarInt(process.env.AMBIENT_TEST_DECIMAL_OFFSET, "No AMBIENT_TEST_DECIMAL_OFFSET");
+const testToken1Native = loadEnvVar(process.env.AMBIENT_TEST_TOKEN1_NATIVE, "No AMBIENT_TEST_TOKEN1_NATIVE");
+const testDecimalOffsetNative = loadEnvVarInt(process.env.AMBIENT_TEST_DECIMAL_OFFSET_NATIVE, "No AMBIENT_TEST_DECIMAL_OFFSET_NATIVE");
+const testToken0ERC20 = loadEnvVar(process.env.AMBIENT_TEST_TOKEN0_ERC20, "No AMBIENT_TEST_TOKEN0_ERC20");
+const testToken1ERC20 = loadEnvVar(process.env.AMBIENT_TEST_TOKEN1_ERC20, "No AMBIENT_TEST_TOKEN1_ERC20");
+const testDecimalOffsetERC20 = loadEnvVarInt(process.env.AMBIENT_TEST_DECIMAL_OFFSET_ERC20, "No AMBIENT_TEST_DECIMAL_OFFSET_ERC20");
 const testPoolIndex = loadEnvVarInt(process.env.AMBIENT_TEST_POOL_INDEX, "No AMBIENT_TEST_POOL_INDEX");
 
 describe("TeaVaultAmbient", function () {
@@ -74,8 +78,10 @@ describe("TeaVaultAmbient", function () {
 
         // get ERC20 tokens
         const MockToken = await ethers.getContractFactory("MockToken");
-        const token0 = MockToken.attach(testToken0);
-        const token1 = MockToken.attach(testToken1);
+        const token1Native = MockToken.attach(testToken1Native);
+
+        const token0ERC20 = MockToken.attach(testToken0ERC20);
+        const token1ERC20 = MockToken.attach(testToken1ERC20);
 
         const TeaVaultAmbient = await ethers.getContractFactory("TeaVaultAmbient");
         const ambientBeacon = await upgrades.deployBeacon(TeaVaultAmbient);
@@ -98,13 +104,14 @@ describe("TeaVaultAmbient", function () {
             ]
         );
 
-        await teaVaultAmbientFactory.createVault(
+        // create native pool
+        const txNative = await teaVaultAmbientFactory.createVault(
             owner.address,
-            "Test Vault",
-            "TVAULT",
-            testDecimalOffset,
-            testToken0,
-            testToken1,
+            "Test Vault Native",
+            "TVAULT-N",
+            testDecimalOffsetNative,
+            NATIVE_ADDRESS,
+            testToken1Native,
             testPoolIndex,
             manager.address,
             999999,
@@ -117,35 +124,60 @@ describe("TeaVaultAmbient", function () {
             },
         );
 
-        const events = await teaVaultAmbientFactory.queryFilter("VaultDeployed");
-        const vault = TeaVaultAmbient.attach(events[0].args[0]);
+        let events = await teaVaultAmbientFactory.queryFilter("VaultDeployed", txNative.block, txNative.block);
+        const vaultNative = TeaVaultAmbient.attach(events[0].args[0]);
 
-        return { owner, manager, treasury, user, vault, token0, token1 };
+        // create ERC20 pool
+        const txERC20 = await teaVaultAmbientFactory.createVault(
+            owner.address,
+            "Test Vault ERC20",
+            "TVAULT-E",
+            testDecimalOffsetERC20,
+            testToken0ERC20,
+            testToken1ERC20,
+            testPoolIndex,
+            manager.address,
+            999999,
+            {
+                treasury: treasury.address,
+                entryFee: 0,
+                exitFee: 0,
+                performanceFee: 0,
+                managementFee: 0,
+            },
+        );
+
+        events = await teaVaultAmbientFactory.queryFilter("VaultDeployed", txERC20.block, txERC20.block);
+        const vaultERC20 = TeaVaultAmbient.attach(events[0].args[0]);
+
+        return { owner, manager, treasury, user, vaultNative, token1Native, vaultERC20, token0ERC20, token1ERC20 };
     }
 
     describe("Deployment", function() {
         it("Should set the correct tokens", async function () {
-            const { vault, token0, token1 } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+            const { vaultNative, token1Native } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
 
-            expect(await vault.assetToken0()).to.equal(token0.target);
-            expect(await vault.assetToken1()).to.equal(token1.target);
+            expect(await vaultNative.assetToken0()).to.equal(NATIVE_ADDRESS);
+            expect(await vaultNative.assetToken1()).to.equal(token1Native.target);
 
-            const poolInfo = await vault.getPoolInfo();
-            expect(poolInfo[0]).to.equal(token0.target);
-            expect(poolInfo[1]).to.equal(token1.target);
+            const poolInfo = await vaultNative.getPoolInfo();
+            expect(poolInfo[0]).to.equal(NATIVE_ADDRESS);
+            expect(poolInfo[1]).to.equal(token1Native.target);
         });
 
         it("Should set the correct decimals", async function () {
-            const { vault, token0 } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+            const { vaultNative, vaultERC20, token0ERC20 } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
 
-            const token0Decimals = await getDecimals(token0);
-            expect(await vault.decimals()).to.equal(token0Decimals + testDecimalOffset);
+            expect(await vaultNative.decimals()).to.equal(NATIVE_DECIMALS);
+
+            const token0Decimals = await getDecimals(token0ERC20);
+            expect(await vaultERC20.decimals()).to.equal(token0Decimals + BigInt(testDecimalOffsetERC20));
         });
     });
 
     describe("Owner functions", function() {
         it("Should be able to set fees from owner", async function() {
-            const { owner, vault } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+            const { owner, vaultNative } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
 
             const feeConfig = {
                 treasury: owner.address,
@@ -155,8 +187,8 @@ describe("TeaVaultAmbient", function () {
                 managementFee: 10000,
             };
 
-            await vault.setFeeConfig(feeConfig);
-            const fees = await vault.feeConfig();
+            await vaultNative.setFeeConfig(feeConfig);
+            const fees = await vaultNative.feeConfig();
 
             expect(feeConfig.treasury).to.equal(fees.treasury);
             expect(feeConfig.entryFee).to.equal(fees.entryFee);
@@ -166,7 +198,7 @@ describe("TeaVaultAmbient", function () {
         });
 
         it("Should not be able to set incorrect fees", async function() {
-            const { owner, vault } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+            const { owner, vaultNative } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
 
             const feeConfig1 = {
                 treasury: owner.address,
@@ -176,8 +208,8 @@ describe("TeaVaultAmbient", function () {
                 managementFee: 10000,
             };
 
-            await expect(vault.setFeeConfig(feeConfig1))
-            .to.be.revertedWithCustomError(vault, "InvalidFeePercentage");
+            await expect(vaultNative.setFeeConfig(feeConfig1))
+            .to.be.revertedWithCustomError(vaultNative, "InvalidFeePercentage");
 
             const feeConfig2 = {
                 treasury: owner.address,
@@ -187,8 +219,8 @@ describe("TeaVaultAmbient", function () {
                 managementFee: 10000,
             };
 
-            await expect(vault.setFeeConfig(feeConfig2))
-            .to.be.revertedWithCustomError(vault, "InvalidFeePercentage");
+            await expect(vaultNative.setFeeConfig(feeConfig2))
+            .to.be.revertedWithCustomError(vaultNative, "InvalidFeePercentage");
 
             const feeConfig3 = {
                 treasury: owner.address,
@@ -198,12 +230,12 @@ describe("TeaVaultAmbient", function () {
                 managementFee: 1000001,
             };
 
-            await expect(vault.setFeeConfig(feeConfig3))
-            .to.be.revertedWithCustomError(vault, "InvalidFeePercentage");
+            await expect(vaultNative.setFeeConfig(feeConfig3))
+            .to.be.revertedWithCustomError(vaultNative, "InvalidFeePercentage");
         });
 
         it("Should not be able to set fees from non-owner", async function() {
-            const { manager, vault } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+            const { manager, vaultNative } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
 
             const feeConfig = {
                 treasury: manager.address,
@@ -213,29 +245,29 @@ describe("TeaVaultAmbient", function () {
                 managementFee: 10000,
             }
 
-            await expect(vault.connect(manager).setFeeConfig(feeConfig))
-            .to.be.revertedWithCustomError(vault, "OwnableUnauthorizedAccount");
+            await expect(vaultNative.connect(manager).setFeeConfig(feeConfig))
+            .to.be.revertedWithCustomError(vaultNative, "OwnableUnauthorizedAccount");
         });
 
         it("Should be able to assign manager from owner", async function() {
-            const { manager, vault } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+            const { manager, vaultNative } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
 
-            await vault.assignManager(manager.address);
-            expect(await vault.manager()).to.equal(manager.address);
+            await vaultNative.assignManager(manager.address);
+            expect(await vaultNative.manager()).to.equal(manager.address);
         });
 
         it("Should not be able to assign manager from non-owner", async function() {
-            const { manager, user, vault } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+            const { manager, user, vaultNative } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
 
-            await expect(vault.connect(manager).assignManager(user.address))
-            .to.be.revertedWithCustomError(vault, "OwnableUnauthorizedAccount");
-            expect(await vault.manager()).to.equal(manager.address);
+            await expect(vaultNative.connect(manager).assignManager(user.address))
+            .to.be.revertedWithCustomError(vaultNative, "OwnableUnauthorizedAccount");
+            expect(await vaultNative.manager()).to.equal(manager.address);
         });
     });
 
-    describe("User functions", function() {        
+    describe("User functions with native token", function() {        
         it("Should be able to deposit and withdraw from user", async function() {
-            const { owner, treasury, user, vault, token0 } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+            const { owner, treasury, user, vaultNative, token1Native } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
 
             // set fees
             const feeConfig = {
@@ -246,32 +278,25 @@ describe("TeaVaultAmbient", function () {
                 managementFee: 10000n,
             }
 
-            await vault.setFeeConfig(feeConfig);
+            await vaultNative.setFeeConfig(feeConfig);
 
             // deposit
-            const token0Decimals = await getDecimals(token0);
-            const vaultDecimals = await getDecimals(vault);
-            await approveToken(token0, vault, ethers.parseUnits("100", token0Decimals));
+            const token0Decimals = NATIVE_DECIMALS;
+            const vaultDecimals = await getDecimals(vaultNative);
+            //await approveToken(token0, vault, ethers.parseUnits("100", token0Decimals));
             const shares = ethers.parseUnits("1", vaultDecimals);
             const token0Amount = ethers.parseUnits("1", token0Decimals);
             const token0AmountWithFee = token0Amount * (1000000n + feeConfig.entryFee) / 1000000n
 
-            let token0Before = await getTokenBalance(token0, user);
+            let token0Before = await ethers.provider.getBalance(user);
             let gasFee = 0n;
-            if (token0.target == ZERO_ADDRESS) {
-                // deposit native token
-                let tx;
-                expect(tx = await vault.connect(user).deposit(shares, token0AmountWithFee, 0n, { value: token0AmountWithFee }))
-                .to.changeTokenBalance(vault, user, shares);
-                const receipt = await ethers.provider.getTransactionReceipt(tx.hash);
-                gasFee = tx.gasPrice * receipt.gasUsed;
-            }
-            else {
-                // deposit ERC20 token
-                expect(await vault.connect(user).deposit(shares, token0AmountWithFee, 0n))
-                .to.changeTokenBalance(vault, user, shares);    
-            }
-            let token0After = await getTokenBalance(token0, user);
+            // deposit native token
+            let tx;
+            expect(tx = await vaultNative.connect(user).deposit(shares, token0AmountWithFee, 0n, { value: token0AmountWithFee }))
+            .to.changeTokenBalance(vaultNative, user, shares);
+            const receipt = await ethers.provider.getTransactionReceipt(tx.hash);
+            gasFee = tx.gasPrice * receipt.gasUsed;
+            let token0After = await ethers.provider.getBalance(user);
             expect(token0Before - token0After).to.equal(token0AmountWithFee + gasFee);
 
             // let expectedAmount0 = ethers.BigNumber.from(token0Amount);
