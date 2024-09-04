@@ -242,11 +242,12 @@ contract TeaVaultAmbient is
         ERC20Upgradeable _token0 = token0;
         ERC20Upgradeable _token1 = token1;
         bool isToken0Native = _token0.isNative();
+        if (isToken0Native && msg.value != 0) revert ValueShouldBeZero();
 
         if (totalShares == 0) {
             // vault is empty, default to 1:1 share to token0 ratio (offseted by _decimalOffset)
             depositedAmount0 = _shares / DECIMALS_MULTIPLIER;
-            _charge(_token0, depositedAmount0);
+            _charge(_token0, _amount0Max);
         }
         else {
             _collectAllSwapFee();
@@ -675,6 +676,7 @@ contract TeaVaultAmbient is
         ERC20Upgradeable _token0 = token0;
         ERC20Upgradeable _token1 = token1;
 
+        // get in-pool swap result from ambient pool as a baseline of the swap rate
         (int128 token0Flow, int128 token1Flow, ) = ambientImpact.calcImpact(
             _token0,
             _token1,
@@ -703,6 +705,7 @@ contract TeaVaultAmbient is
         paidAmount = srcBalanceBefore - srcBalanceAfter;
         receivedAmount = dstBalanceAfter - dstBalanceBefore;
 
+        // check if received amount not less than baseline and pre-set ammount
         if (receivedAmount < baselineAmount) revert WorseRate(baselineAmount, receivedAmount);
         if (receivedAmount < _minReceivedAmount) revert InsufficientSwapResult(_minReceivedAmount, receivedAmount);
 
