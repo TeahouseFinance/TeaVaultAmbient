@@ -11,6 +11,7 @@ interface ITeaVaultAmbient {
     error InvalidFeeCap();
     error InvalidFeePercentage();
     error PositionDoesNotExist();
+    error ValueShouldBeZero();
     error InvalidShareAmount();
     error InsufficientValue();
     error InvalidPriceSlippage(uint256 amount0, uint256 amount1);
