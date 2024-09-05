@@ -59,8 +59,8 @@ library VaultUtils {
 
         value0 = _amount0 + FullMath.mulDiv(
             _amount1,
-            Q64,
-            FullMath.mulDiv(sqrtPriceX64, sqrtPriceX64, Q64)
+            FullMath.mulDiv(sqrtPriceX64, sqrtPriceX64, Q64),
+            Q64
         );
     }
 
@@ -76,8 +76,8 @@ library VaultUtils {
 
         value1 = _amount1 + FullMath.mulDiv(
             _amount0,
-            FullMath.mulDiv(sqrtPriceX64, sqrtPriceX64, Q64),
-            Q64
+            Q64,
+            FullMath.mulDiv(sqrtPriceX64, sqrtPriceX64, Q64)
         );
     }
 
@@ -98,6 +98,10 @@ library VaultUtils {
             _amount0,
             _amount1
         );
+
+        // zero the lower 11 bits to avoid 'FD' revert
+        liquidity >>= 11;
+        liquidity <<= 11;
     }
 
     function getAmountsForLiquidity(
@@ -164,9 +168,8 @@ library VaultUtils {
         uint256 liquidity
     ) {
         if (sqrtRatioAX64 > sqrtRatioBX64) (sqrtRatioAX64, sqrtRatioBX64) = (sqrtRatioBX64, sqrtRatioAX64);
-        uint256 intermediate = FullMath.mulDiv(sqrtRatioAX64, sqrtRatioBX64, Q64);
 
-        return FullMath.mulDiv(amount0, intermediate, sqrtRatioBX64 - sqrtRatioAX64);
+        return FullMath.mulDiv(amount0, Q64, sqrtRatioBX64 - sqrtRatioAX64);
     }
 
     function _getLiquidityForAmount1(
@@ -177,8 +180,9 @@ library VaultUtils {
         uint256 liquidity
     ) {
         if (sqrtRatioAX64 > sqrtRatioBX64) (sqrtRatioAX64, sqrtRatioBX64) = (sqrtRatioBX64, sqrtRatioAX64);
+        uint256 intermediate = FullMath.mulDiv(sqrtRatioAX64, sqrtRatioBX64, Q64);
 
-        return FullMath.mulDiv(amount1, Q64, sqrtRatioBX64 - sqrtRatioAX64);
+        return FullMath.mulDiv(amount1, intermediate, sqrtRatioBX64 - sqrtRatioAX64);        
     }
 
     function _getAmount0ForLiquidity(
@@ -190,7 +194,7 @@ library VaultUtils {
     ) {
         if (sqrtRatioAX64 > sqrtRatioBX64) (sqrtRatioAX64, sqrtRatioBX64) = (sqrtRatioBX64, sqrtRatioAX64);
 
-        return FullMath.mulDiv(liquidity << RESOLUTION, sqrtRatioBX64 - sqrtRatioAX64, sqrtRatioBX64) / sqrtRatioAX64;
+        return FullMath.mulDiv(liquidity, sqrtRatioBX64 - sqrtRatioAX64, Q64);
     }
 
     function _getAmount1ForLiquidity(
@@ -202,7 +206,7 @@ library VaultUtils {
     ) {
         if (sqrtRatioAX64 > sqrtRatioBX64) (sqrtRatioAX64, sqrtRatioBX64) = (sqrtRatioBX64, sqrtRatioAX64);
 
-        return FullMath.mulDiv(liquidity, sqrtRatioBX64 - sqrtRatioAX64, Q64);
+        return FullMath.mulDiv(liquidity << RESOLUTION, sqrtRatioBX64 - sqrtRatioAX64, sqrtRatioBX64) / sqrtRatioAX64;
     }
 
     function _getLiquidityForAmounts(
@@ -217,14 +221,14 @@ library VaultUtils {
         if (sqrtRatioAX64 > sqrtRatioBX64) (sqrtRatioAX64, sqrtRatioBX64) = (sqrtRatioBX64, sqrtRatioAX64);
 
         if (sqrtRatioX64 <= sqrtRatioAX64) {
-            liquidity = _getLiquidityForAmount0(sqrtRatioAX64, sqrtRatioBX64, amount0);
+            liquidity = _getLiquidityForAmount1(sqrtRatioAX64, sqrtRatioBX64, amount1);
         } else if (sqrtRatioX64 < sqrtRatioBX64) {
-            uint256 liquidity0 = _getLiquidityForAmount0(sqrtRatioX64, sqrtRatioBX64, amount0);
             uint256 liquidity1 = _getLiquidityForAmount1(sqrtRatioAX64, sqrtRatioX64, amount1);
+            uint256 liquidity0 = _getLiquidityForAmount0(sqrtRatioX64, sqrtRatioBX64, amount0);
 
             liquidity = liquidity0 < liquidity1 ? liquidity0 : liquidity1;
         } else {
-            liquidity = _getLiquidityForAmount1(sqrtRatioAX64, sqrtRatioBX64, amount1);
+            liquidity = _getLiquidityForAmount0(sqrtRatioAX64, sqrtRatioBX64, amount0);
         }
     }
 
@@ -240,12 +244,12 @@ library VaultUtils {
         if (sqrtRatioAX64 > sqrtRatioBX64) (sqrtRatioAX64, sqrtRatioBX64) = (sqrtRatioBX64, sqrtRatioAX64);
 
         if (sqrtRatioX64 <= sqrtRatioAX64) {
-            amount0 = _getAmount0ForLiquidity(sqrtRatioAX64, sqrtRatioBX64, liquidity);
-        } else if (sqrtRatioX64 < sqrtRatioBX64) {
-            amount0 = _getAmount0ForLiquidity(sqrtRatioX64, sqrtRatioBX64, liquidity);
-            amount1 = _getAmount1ForLiquidity(sqrtRatioAX64, sqrtRatioX64, liquidity);
-        } else {
             amount1 = _getAmount1ForLiquidity(sqrtRatioAX64, sqrtRatioBX64, liquidity);
+        } else if (sqrtRatioX64 < sqrtRatioBX64) {
+            amount1 = _getAmount1ForLiquidity(sqrtRatioX64, sqrtRatioBX64, liquidity);
+            amount0 = _getAmount0ForLiquidity(sqrtRatioAX64, sqrtRatioX64, liquidity);
+        } else {
+            amount0 = _getAmount0ForLiquidity(sqrtRatioAX64, sqrtRatioBX64, liquidity);
         }
     }
 }

@@ -443,30 +443,32 @@ describe("TeaVaultAmbient", function () {
 
             // add "center" position
             let liquidity1 = await vaultNative.getLiquidityForAmounts(tick1, tick2, amount0AfterSwap / 3n, amount1AfterSwap / 3n);
-            liquidity1 *= 392915775n;
-            liquidity1 &= (1n << 128n) - (1n << 11n);   // make sure the lower 11 bits are 0 to avoid revert "FD" problem
-            //liquidity1 <<= 11n;
-            //liquidity1 *= 2n;
             await vaultNative.connect(manager).addLiquidity(tick1, tick2, liquidity1, 0, 0, UINT64_MAX);
 
             let positionInfo = await vaultNative.positionInfo(0);
-            console.log(amount0AfterSwap / 3n, amount1AfterSwap / 3n);
-            console.log(positionInfo);
-            console.log(await vaultNative.getAmountsForLiquidity(tick1, tick2, liquidity1));
+            let amounts = await vaultNative.getAmountsForLiquidity(tick1, tick2, liquidity1);
+            expect(positionInfo[0]).to.be.closeTo(amounts[0], 1n);
+            expect(positionInfo[1]).to.be.closeTo(amounts[1], 1n);
             
             // add "lower" position
-            const amount1 = await token1Native.balanceOf(vaultNative);
-            let liquidity0 = await vaultNative.getLiquidityForAmounts(tick0, tick1, 0, amount1);
-            //liquidity0 *= 392915775n;
-            liquidity0 *= 100000n;
-            liquidity0 &= (1n << 128n) - (1n << 11n);   // make sure the lower 11 bits are 0 to avoid revert "FD" problem
-            console.log(liquidity0);
+            const amount0 = await ethers.provider.getBalance(vaultNative);
+            let liquidity0 = await vaultNative.getLiquidityForAmounts(tick0, tick1, amount0, 0);
             await vaultNative.connect(manager).addLiquidity(tick0, tick1, liquidity0, 0, 0, UINT64_MAX);
 
             positionInfo = await vaultNative.positionInfo(1);
-            console.log(amount1);
-            console.log(positionInfo);
+            amounts = await vaultNative.getAmountsForLiquidity(tick0, tick1, liquidity0);
+            expect(positionInfo[0]).to.be.closeTo(amounts[0], 1n);
+            expect(positionInfo[1]).to.be.closeTo(amounts[1], 1n);
 
+            // add "upper" position
+            const amount1 = await token1Native.balanceOf(vaultNative);
+            let liquidity2 = await vaultNative.getLiquidityForAmounts(tick2, tick3, 0, amount1 - 10n); // slightly lower amount1 to avoid precision problem
+            await vaultNative.connect(manager).addLiquidity(tick2, tick3, liquidity2, 0, 0, UINT64_MAX);
+
+            positionInfo = await vaultNative.positionInfo(2);
+            amounts = await vaultNative.getAmountsForLiquidity(tick2, tick3, liquidity2);
+            expect(positionInfo[0]).to.be.closeTo(amounts[0], 1n);
+            expect(positionInfo[1]).to.be.closeTo(amounts[1], 1n);
         });
     });
 
