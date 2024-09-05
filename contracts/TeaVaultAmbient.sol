@@ -242,7 +242,7 @@ contract TeaVaultAmbient is
         ERC20Upgradeable _token0 = token0;
         ERC20Upgradeable _token1 = token1;
         bool isToken0Native = _token0.isNative();
-        if (isToken0Native && msg.value != 0) revert ValueShouldBeZero();
+        if (!isToken0Native && msg.value != 0) revert ValueShouldBeZero();
 
         if (totalShares == 0) {
             // vault is empty, default to 1:1 share to token0 ratio (offseted by _decimalOffset)
