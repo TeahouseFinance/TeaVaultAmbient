@@ -380,7 +380,7 @@ describe("TeaVaultAmbient", function () {
     });
 
     describe("Manager functions with native token", function() {        
-        it("Should be able to swap and add liquidity", async function() {
+        it("Should be able to swap, add liquidity, remove liquidity, and withdraw", async function() {
             const { treasury, user, manager, vaultNative, token1Native } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
 
             // set fees
@@ -389,7 +389,7 @@ describe("TeaVaultAmbient", function () {
                 entryFee: 1000n,
                 exitFee: 2000n,
                 performanceFee: 100000n,
-                managementFee: 10000n,
+                managementFee: 0n,          // leave management fee at zero to make sure the vault can be emptied
             }
 
             await vaultNative.setFeeConfig(feeConfig);
@@ -469,6 +469,69 @@ describe("TeaVaultAmbient", function () {
             amounts = await vaultNative.getAmountsForLiquidity(tick2, tick3, liquidity2);
             expect(positionInfo[0]).to.be.closeTo(amounts[0], 1n);
             expect(positionInfo[1]).to.be.closeTo(amounts[1], 1n);
+
+            // check assets and token values
+            let assets = await vaultNative.vaultAllUnderlyingAssets();
+            expect(assets[0]).to.be.closeTo(amount0AfterSwap, amount0AfterSwap / 100n);
+            expect(assets[1]).to.be.closeTo(amount1AfterSwap, amount1AfterSwap / 100n);
+
+            expect(await vaultNative.estimatedValueInToken0()).to.be.closeTo(amount0AfterSwap * 2n, amount0AfterSwap * 2n / 100n);
+            expect(await vaultNative.estimatedValueInToken1()).to.be.closeTo(amount1AfterSwap * 2n, amount1AfterSwap * 2n / 100n);
+
+            // add more liquidity
+            const shares2 = ethers.parseUnits("2", vaultDecimals);
+            const totalShares = await vaultNative.totalSupply();
+            let token0Amount2 = (assets[0] * shares2 + totalShares - 1n) / totalShares;
+            let token1Amount2 = (assets[1] * shares2 + totalShares - 1n) / totalShares;
+            token0Amount2 += (token0Amount2 * feeConfig.entryFee + feeMultiplier - 1n) / feeMultiplier;
+            token1Amount2 += (token1Amount2 * feeConfig.entryFee + feeMultiplier - 1n) / feeMultiplier;
+
+            // deposit more
+            await token1Native.connect(user).approve(vaultNative, token1Amount2);
+            await vaultNative.connect(user).deposit(shares2 * 99n/ 100n, token0Amount2, token1Amount2, { value: token0Amount2 });
+
+            // reduce some position
+            await helpers.time.increase(1000);   // advance some time to get over the "JIT" limit
+            const position1 = await vaultNative.positions(1);
+            await vaultNative.connect(manager).removeLiquidity(position1.tickLower, position1.tickUpper, position1.liquidity, 0, 0, UINT64_MAX);
+
+            // check assets and token values
+            assets = await vaultNative.vaultAllUnderlyingAssets();
+            const newAmount0 = amount0AfterSwap + token0Amount2;
+            const newAmount1 = amount1AfterSwap + token1Amount2;
+            expect(assets[0]).to.be.closeTo(newAmount0, newAmount0 / 100n);
+            expect(assets[1]).to.be.closeTo(newAmount1, newAmount1 / 100n);
+
+            expect(await vaultNative.estimatedValueInToken0()).to.be.closeTo(newAmount0 * 2n, newAmount0 * 2n / 100n);
+            expect(await vaultNative.estimatedValueInToken1()).to.be.closeTo(newAmount1 * 2n, newAmount1 * 2n / 100n);
+
+            // withdraw
+            const amount0Before = await ethers.provider.getBalance(user);
+            const amount1Before = await token1Native.balanceOf(user);
+            const userShares = await vaultNative.balanceOf(user);
+            expect(await vaultNative.connect(user).withdraw(userShares, 0, 0))
+            .to.changeTokenBalance(vaultNative, user, -userShares);
+            const amount0After = await ethers.provider.getBalance(user);
+            const amount1After = await token1Native.balanceOf(user);
+
+            // estimate value of received tokens
+            const amount0Diff = amount0After - amount0Before;
+            const amount1Diff = amount1After - amount1Before;
+            const sqrtPriceQ64 = poolInfo[6];
+            const price = sqrtPriceQ64 * sqrtPriceQ64;
+            const totalIn0 = amount1Diff * price / (1n << 128n) + amount0Diff;
+
+            // expect withdrawn tokens to be > 95% of invested token0
+            const investedToken0 = token0AmountWithFee + token0Amount2 + token1Amount2 * price / (1n << 128n);
+            expect(totalIn0).to.be.closeTo(investedToken0, investedToken0 / 100n);
+
+            // remove the remaining share
+            const remainShares = await vaultNative.balanceOf(treasury);
+            await vaultNative.connect(treasury).withdraw(remainShares, 0, 0);
+            expect(await vaultNative.totalSupply()).to.equal(0);
+
+            // positions should be empty
+            expect(await vaultNative.getAllPositions()).to.eql([]);
         });
     });
 

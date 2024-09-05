@@ -274,6 +274,11 @@ contract TeaVaultAmbient is
                 position.liquidity += liquidity.toUint128();
                 depositedAmount0 += amount0;
                 depositedAmount1 += amount1;
+
+                if (value > 0) {
+                    // token0 is native, reduce value by deposited amount
+                    value -= amount0;
+                }
             }
             _token0.nonNativeApprove(_ambientSwapDex, 0);
             _token1.nonNativeApprove(_ambientSwapDex, 0);
@@ -500,7 +505,7 @@ contract TeaVaultAmbient is
     ) {
         // make sure the last 11bits to be zero to prevent "FD" error from Ambient
         uint256 roundUpX12Liquidity = (_liquidity >> 11) << 11;
-        roundUpX12Liquidity = roundUpX12Liquidity < _liquidity ? roundUpX12Liquidity + 1 << 11 : roundUpX12Liquidity;
+        roundUpX12Liquidity = roundUpX12Liquidity < _liquidity ? roundUpX12Liquidity + (1 << 11) : roundUpX12Liquidity;
 
         (amount0, amount1) = _lpCall(
             _value,
