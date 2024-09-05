@@ -498,16 +498,20 @@ contract TeaVaultAmbient is
         uint256 amount0,
         uint256 amount1
     ) {
+        // make sure the last 11bits to be zero to prevent "FD" error from Ambient
+        uint256 roundUpX12Liquidity = (_liquidity >> 11) << 11;
+        roundUpX12Liquidity = roundUpX12Liquidity < _liquidity ? roundUpX12Liquidity + 1 << 11 : roundUpX12Liquidity;
+
         (amount0, amount1) = _lpCall(
             _value,
             lpParamsConfig.callPath,
             lpParamsConfig.mintCodeFixedInLiquidityUnits,
             _tickLower,
             _tickUpper,
-            _liquidity.toUint128()
+            roundUpX12Liquidity.toUint128()
         );
 
-        emit AddLiquidity(_tickLower, _tickUpper, _liquidity, amount0, amount1);
+        emit AddLiquidity(_tickLower, _tickUpper, roundUpX12Liquidity, amount0, amount1);
     }
 
     function _removeLiquidity(
@@ -518,16 +522,18 @@ contract TeaVaultAmbient is
         uint256 amount0,
         uint256 amount1
     ) {
+        uint256 roundDownX12Liquidity = (_liquidity >> 11) << 11;
+
         (amount0, amount1) = _lpCall(
             0,
             lpParamsConfig.callPath,
             lpParamsConfig.burnCodeFixedInLiquidityUnits,
             _tickLower,
             _tickUpper,
-            _liquidity.toUint128()
+            roundDownX12Liquidity.toUint128()
         );
 
-        emit RemoveLiquidity(_tickLower, _tickUpper, _liquidity, amount0, amount1);
+        emit RemoveLiquidity(_tickLower, _tickUpper, roundDownX12Liquidity, amount0, amount1);
     }
 
     function _harvest(int24 _tickLower, int24 _tickUpper) internal returns (uint256 amount0, uint256 amount1) {
