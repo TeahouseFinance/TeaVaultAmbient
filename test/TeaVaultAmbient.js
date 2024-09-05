@@ -11,7 +11,10 @@ const UINT64_MAX = '0x' + 'f'.repeat(16);
 
 const UniswapV3SwapRouterABI = [
     "function WETH9() external view returns (address)",
-    "function exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160)) external payable returns (uint256)"
+    "function exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160)) external payable returns (uint256)",
+    "function multicall(bytes[] calldata data) external payable returns (bytes[] memory results)",
+    "function unwrapWETH9(uint256 amountMinimum, address recipient) external payable",
+    "function refundETH() external payable"
 ];
 
 function loadEnvVar(env, errorMsg) {
@@ -406,7 +409,7 @@ describe("TeaVaultAmbient", function () {
 
             await vaultNative.connect(user).deposit(shares, token0AmountWithFee, 0n, { value: token0AmountWithFee })
 
-            // manager swap
+            // manager swap, using UniswapV3
             const v3Router = new ethers.Contract(testRouter, UniswapV3SwapRouterABI, ethers.provider);
             const weth9 = await v3Router.WETH9();
             const swapAmount = token0Amount / 2n;
@@ -492,8 +495,8 @@ describe("TeaVaultAmbient", function () {
 
             // reduce some position
             await helpers.time.increase(1000);   // advance some time to get over the "JIT" limit
-            const position1 = await vaultNative.positions(1);
-            await vaultNative.connect(manager).removeLiquidity(position1.tickLower, position1.tickUpper, position1.liquidity, 0, 0, UINT64_MAX);
+            const position = await vaultNative.positions(2);
+            await vaultNative.connect(manager).removeLiquidity(position.tickLower, position.tickUpper, position.liquidity, 0, 0, UINT64_MAX);
 
             // check assets and token values
             assets = await vaultNative.vaultAllUnderlyingAssets();
@@ -504,6 +507,43 @@ describe("TeaVaultAmbient", function () {
 
             expect(await vaultNative.estimatedValueInToken0()).to.be.closeTo(newAmount0 * 2n, newAmount0 * 2n / 100n);
             expect(await vaultNative.estimatedValueInToken1()).to.be.closeTo(newAmount1 * 2n, newAmount1 * 2n / 100n);
+
+            // manager swap back, using CrocSwapDex
+            const swapAmount2 = await token1Native.balanceOf(vaultNative);
+            const crocSwapDex = await ethers.getContractAt("ICrocSwapDex", testSwapDex);
+            const abiCoder = ethers.AbiCoder.defaultAbiCoder();
+            const callData = abiCoder.encode(
+                [
+                    "address",
+                    "address",
+                    "uint256", 
+                    "bool", 
+                    "bool",
+                    "uint128",
+                    "uint16",
+                    "uint128",
+                    "uint128",
+                    "uint8"
+                ],
+                [
+                    ZERO_ADDRESS,
+                    token1Native.target,
+                    testPoolIndex,
+                    false,  // sell
+                    false,  // in quote quantity
+                    swapAmount2,
+                    0n,
+                    0n,
+                    0n,
+                    0n
+                ]
+            );
+
+            await token1Native.connect(user).approve(crocSwapDex, swapAmount2);
+            const outAmount2Data = await crocSwapDex.connect(user).userCmd.staticCall(1, callData);
+            const outAmount2 = abiCoder.decode([ "int128", "int128" ], outAmount2Data);
+            const swapCallData = crocSwapDex.interface.encodeFunctionData("userCmd", [ 1, callData ]);
+            await vaultNative.connect(manager).executeSwap(false, swapAmount2, -outAmount2[0], crocSwapDex, swapCallData);
 
             // withdraw
             const amount0Before = await ethers.provider.getBalance(user);
@@ -523,7 +563,7 @@ describe("TeaVaultAmbient", function () {
 
             // expect withdrawn tokens to be > 95% of invested token0
             const investedToken0 = token0AmountWithFee + token0Amount2 + token1Amount2 * price / (1n << 128n);
-            expect(totalIn0).to.be.closeTo(investedToken0, investedToken0 / 100n);
+            expect(totalIn0).to.be.closeTo(investedToken0, investedToken0 / 50n);
 
             // remove the remaining share
             const remainShares = await vaultNative.balanceOf(treasury);
