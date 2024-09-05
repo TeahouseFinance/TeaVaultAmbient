@@ -685,7 +685,7 @@ contract TeaVaultAmbient is
             _zeroForOne,
             _maxPaidAmount.toUint128(),
             0,
-            0
+            _zeroForOne ? type(uint128).max : 0     // when buying, priceLimit is upper bound
         );
 
         (ERC20Upgradeable src, ERC20Upgradeable dst, uint256 baselineAmount) = _zeroForOne ? 
@@ -699,7 +699,7 @@ contract TeaVaultAmbient is
         src.safeUniversalTransfer(address(_swapRelayer), _maxPaidAmount);
 
         _swapRelayer.swap(src, dst, _maxPaidAmount, _swapRouter, _data);
-        
+
         uint256 srcBalanceAfter = src.getBalance(address(this));
         uint256 dstBalanceAfter = dst.getBalance(address(this));
         paidAmount = srcBalanceBefore - srcBalanceAfter;

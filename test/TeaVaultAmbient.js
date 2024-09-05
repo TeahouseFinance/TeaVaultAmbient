@@ -9,6 +9,11 @@ const NATIVE_DECIMALS = 18;
 const UINT256_MAX = '0x' + 'f'.repeat(64);
 const UINT64_MAX = '0x' + 'f'.repeat(16);
 
+const UniswapV3SwapRouterABI = [
+    "function WETH9() external view returns (address)",
+    "function exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160)) external payable returns (uint256)"
+];
+
 function loadEnvVar(env, errorMsg) {
     if (env == undefined) {
         throw errorMsg;
@@ -44,6 +49,7 @@ const testToken0ERC20Whale = loadEnvVar(process.env.AMBIENT_TEST_TOKEN0_ERC20_WH
 const testToken1ERC20Whale = loadEnvVar(process.env.AMBIENT_TEST_TOKEN1_ERC20_WHALE, "No AMBIENT_TEST_TOKEN1_ERC20_WHALE");
 const testDecimalOffsetERC20 = loadEnvVarInt(process.env.AMBIENT_TEST_DECIMAL_OFFSET_ERC20, "No AMBIENT_TEST_DECIMAL_OFFSET_ERC20");
 const testPoolIndex = loadEnvVarInt(process.env.AMBIENT_TEST_POOL_INDEX, "No AMBIENT_TEST_POOL_INDEX");
+const testRouter = loadEnvVar(process.env.AMBIENT_TEST_UNISWAP_ROUTER, "No AMBIENT_TEST_UNISWAP_ROUTER");
 
 describe("TeaVaultAmbient", function () {
     async function deployTeaVaultAmbientFixture() {
@@ -370,6 +376,97 @@ describe("TeaVaultAmbient", function () {
             // withdraw with slippage check
             await expect(vaultNative.connect(user).withdraw(shares, token0Amount + 100n, 0n))
             .to.be.revertedWithCustomError(vaultNative, "InvalidPriceSlippage");
+        });
+    });
+
+    describe("Manager functions with native token", function() {        
+        it("Should be able to swap and add liquidity", async function() {
+            const { treasury, user, manager, vaultNative, token1Native } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+
+            // set fees
+            const feeConfig = {
+                treasury: treasury.address,
+                entryFee: 1000n,
+                exitFee: 2000n,
+                performanceFee: 100000n,
+                managementFee: 10000n,
+            }
+
+            await vaultNative.setFeeConfig(feeConfig);
+
+            const feeMultiplier = await vaultNative.FEE_MULTIPLIER();
+
+            // deposit
+            const token0Decimals = NATIVE_DECIMALS;
+            const vaultDecimals = await vaultNative.decimals();
+            const shares = ethers.parseUnits("1", vaultDecimals);
+            const token0Amount = ethers.parseUnits("1", token0Decimals);
+            const token0EntryFee = token0Amount * feeConfig.entryFee / feeMultiplier;
+            const token0AmountWithFee = token0Amount + token0EntryFee;
+
+            await vaultNative.connect(user).deposit(shares, token0AmountWithFee, 0n, { value: token0AmountWithFee })
+
+            // manager swap
+            const v3Router = new ethers.Contract(testRouter, UniswapV3SwapRouterABI, ethers.provider);
+            const weth9 = await v3Router.WETH9();
+            const swapAmount = token0Amount / 2n;
+            const swapRelayer = await vaultNative.swapRelayer();
+            const swapParams = [
+                weth9,
+                token1Native.target,
+                500,
+                swapRelayer,
+                UINT64_MAX,
+                swapAmount,
+                0n,
+                0n
+            ];
+            const outAmount = await v3Router.connect(user).exactInputSingle.staticCall(swapParams, { value: swapAmount });
+            const uniswapV3SwapData = v3Router.interface.encodeFunctionData("exactInputSingle", [ swapParams ]);
+            await vaultNative.connect(manager).executeSwap(true, swapAmount, outAmount, v3Router.target, uniswapV3SwapData);
+
+            const amount0AfterSwap = await ethers.provider.getBalance(vaultNative);
+            const amount1AfterSwap = await token1Native.balanceOf(vaultNative);
+            expect(amount0AfterSwap).to.gte(token0Amount - swapAmount); // should use swapAmount or less
+            expect(amount1AfterSwap).to.gte(outAmount); // should receive outAmount or more
+
+            // add liquidity
+            const poolInfo = await vaultNative.getPoolInfo();
+            const currentTick = poolInfo[7];
+            const tickSpacing = poolInfo[5];
+
+            // add positions
+            const tick0 = ((currentTick - tickSpacing * 30n) / tickSpacing) * tickSpacing;
+            const tick1 = ((currentTick - tickSpacing * 10n) / tickSpacing) * tickSpacing;
+            const tick2 = ((currentTick + tickSpacing * 10n) / tickSpacing) * tickSpacing;
+            const tick3 = ((currentTick + tickSpacing * 30n) / tickSpacing) * tickSpacing;
+
+            // add "center" position
+            let liquidity1 = await vaultNative.getLiquidityForAmounts(tick1, tick2, amount0AfterSwap / 3n, amount1AfterSwap / 3n);
+            liquidity1 *= 392915775n;
+            liquidity1 &= (1n << 128n) - (1n << 11n);   // make sure the lower 11 bits are 0 to avoid revert "FD" problem
+            //liquidity1 <<= 11n;
+            //liquidity1 *= 2n;
+            await vaultNative.connect(manager).addLiquidity(tick1, tick2, liquidity1, 0, 0, UINT64_MAX);
+
+            let positionInfo = await vaultNative.positionInfo(0);
+            console.log(amount0AfterSwap / 3n, amount1AfterSwap / 3n);
+            console.log(positionInfo);
+            console.log(await vaultNative.getAmountsForLiquidity(tick1, tick2, liquidity1));
+            
+            // add "lower" position
+            const amount1 = await token1Native.balanceOf(vaultNative);
+            let liquidity0 = await vaultNative.getLiquidityForAmounts(tick0, tick1, 0, amount1);
+            //liquidity0 *= 392915775n;
+            liquidity0 *= 100000n;
+            liquidity0 &= (1n << 128n) - (1n << 11n);   // make sure the lower 11 bits are 0 to avoid revert "FD" problem
+            console.log(liquidity0);
+            await vaultNative.connect(manager).addLiquidity(tick0, tick1, liquidity0, 0, 0, UINT64_MAX);
+
+            positionInfo = await vaultNative.positionInfo(1);
+            console.log(amount1);
+            console.log(positionInfo);
+
         });
     });
 
