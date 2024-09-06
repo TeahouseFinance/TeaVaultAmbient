@@ -18,10 +18,10 @@ import {SwapRelayer} from "./SwapRelayer.sol";
 contract TeaVaultAmbientFactory is ITeaVaultAmbientFactory, Initializable, UUPSUpgradeable, OwnableUpgradeable, PausableUpgradeable {
     address private vaultBeacon;
     SwapRelayer public swapRelayer;
-    address ambientSwapDex;
-    address ambientImpact;
-    address ambientQuery;
-    TeaVaultAmbient.LpParamsConfig lpParamsConfig;
+    address public ambientSwapDex;
+    address public ambientImpact;
+    address public ambientQuery;
+    TeaVaultAmbient.LpParamsConfig public lpParamsConfig;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
