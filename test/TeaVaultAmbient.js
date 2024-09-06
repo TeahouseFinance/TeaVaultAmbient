@@ -45,6 +45,7 @@ const testMintCode = loadEnvVarInt(process.env.AMBIENT_TEST_MINT_CODE, "No AMBIE
 const testBurnCode = loadEnvVarInt(process.env.AMBIENT_TEST_BURN_CODE, "No AMBIENT_TEST_BURN_CODE");
 const testHarvestCode = loadEnvVarInt(process.env.AMBIENT_TEST_HARVEST_CODE, "No AMBIENT_TEST_HARVEST_CODE");
 const testToken1Native = loadEnvVar(process.env.AMBIENT_TEST_TOKEN1_NATIVE, "No AMBIENT_TEST_TOKEN1_NATIVE");
+const testToken1NativeWhale = loadEnvVar(process.env.AMBIENT_TEST_TOKEN1_NATIVE_WHALE, "No AMBIENT_TEST_TOKEN1_NATIVE_WHALE");
 const testDecimalOffsetNative = loadEnvVarInt(process.env.AMBIENT_TEST_DECIMAL_OFFSET_NATIVE, "No AMBIENT_TEST_DECIMAL_OFFSET_NATIVE");
 const testToken0ERC20 = loadEnvVar(process.env.AMBIENT_TEST_TOKEN0_ERC20, "No AMBIENT_TEST_TOKEN0_ERC20");
 const testToken1ERC20 = loadEnvVar(process.env.AMBIENT_TEST_TOKEN1_ERC20, "No AMBIENT_TEST_TOKEN1_ERC20");
@@ -70,15 +71,20 @@ describe("TeaVaultAmbient", function () {
         const token1ERC20 = MockToken.attach(testToken1ERC20);
 
         // get tokens from whale
+        await helpers.impersonateAccount(testToken1NativeWhale);
+        const token1NativeWhale = await ethers.getSigner(testToken1NativeWhale);
+        await helpers.setBalance(token1NativeWhale.address, ethers.parseEther("100"));  // assign some eth to the whale in case it's a contract and not accepting eth
+        await token1Native.connect(token1NativeWhale).transfer(user, ethers.parseUnits("100000", await token1Native.decimals()));
+
         await helpers.impersonateAccount(testToken0ERC20Whale);
         const token0Whale = await ethers.getSigner(testToken0ERC20Whale);
         await helpers.setBalance(token0Whale.address, ethers.parseEther("100"));  // assign some eth to the whale in case it's a contract and not accepting eth
-        await token0ERC20.connect(token0Whale).transfer(user.address, ethers.parseUnits("100000", await token0ERC20.decimals()));
+        await token0ERC20.connect(token0Whale).transfer(user, ethers.parseUnits("100000", await token0ERC20.decimals()));
 
         await helpers.impersonateAccount(testToken1ERC20Whale);
         const token1Whale = await ethers.getSigner(testToken1ERC20Whale);
         await helpers.setBalance(token1Whale.address, ethers.parseEther("100"));  // assign some eth to the whale in case it's a contract and not accepting eth
-        await token1ERC20.connect(token1Whale).transfer(user.address, ethers.parseUnits("100000", await token1ERC20.decimals()));
+        await token1ERC20.connect(token1Whale).transfer(user, ethers.parseUnits("100000", await token1ERC20.decimals()));
 
         // deploy vault
         const TeaVaultAmbient = await ethers.getContractFactory("TeaVaultAmbient");
