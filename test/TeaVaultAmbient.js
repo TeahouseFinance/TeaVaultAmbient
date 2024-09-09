@@ -40,7 +40,8 @@ const testBlock = loadEnvVarInt(process.env.AMBIENT_TEST_BLOCK, "No AMBIENT_TEST
 const testSwapDex = loadEnvVar(process.env.AMBIENT_TEST_SWAP_DEX, "No AMBIENT_TEST_SWAP_DEX");
 const testImpact = loadEnvVar(process.env.AMBIENT_TEST_IMPACT, "No AMBIENT_TEST_IMPACT");
 const testQuery = loadEnvVar(process.env.AMBIENT_TEST_QUERY, "No AMBIENT_TEST_QUERY");
-const testCallPath = loadEnvVarInt(process.env.AMBIENT_TEST_CALL_PATH, "No AMBIENT_TEST_CALL_PATH");
+const testSwapCallPath = loadEnvVarInt(process.env.AMBIENT_TEST_SWAP_CALL_PATH, "No AMBIENT_TEST_SWAP_CALL_PATH");
+const testLpCallPath = loadEnvVarInt(process.env.AMBIENT_TEST_LP_CALL_PATH, "No AMBIENT_TEST_LP_CALL_PATH");
 const testMintCode = loadEnvVarInt(process.env.AMBIENT_TEST_MINT_CODE, "No AMBIENT_TEST_MINT_CODE");
 const testBurnCode = loadEnvVarInt(process.env.AMBIENT_TEST_BURN_CODE, "No AMBIENT_TEST_BURN_CODE");
 const testHarvestCode = loadEnvVarInt(process.env.AMBIENT_TEST_HARVEST_CODE, "No AMBIENT_TEST_HARVEST_CODE");
@@ -100,7 +101,8 @@ describe("TeaVaultAmbient", function () {
                 testImpact,
                 testQuery,
                 {
-                    callPath: testCallPath,
+                    swapCallPath: testSwapCallPath,
+                    lpCallPath: testLpCallPath,
                     mintCodeFixedInLiquidityUnits: testMintCode,
                     burnCodeFixedInLiquidityUnits: testBurnCode,
                     harvestCodeAccumulatedFees: testHarvestCode,
