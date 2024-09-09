@@ -21,7 +21,7 @@ contract TeaVaultAmbientFactory is ITeaVaultAmbientFactory, Initializable, UUPSU
     address public ambientSwapDex;
     address public ambientImpact;
     address public ambientQuery;
-    TeaVaultAmbient.LpParamsConfig public lpParamsConfig;
+    TeaVaultAmbient.ParamsConfig public paramsConfig;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -36,7 +36,7 @@ contract TeaVaultAmbientFactory is ITeaVaultAmbientFactory, Initializable, UUPSU
         address _ambientSwapDex,
         address _ambientImpact,
         address _ambientQuery,
-        TeaVaultAmbient.LpParamsConfig calldata _lpParamsConfig
+        TeaVaultAmbient.ParamsConfig calldata _paramsConfig
     ) public initializer {
         __UUPSUpgradeable_init();
         __Ownable_init(_owner);
@@ -46,7 +46,7 @@ contract TeaVaultAmbientFactory is ITeaVaultAmbientFactory, Initializable, UUPSU
         ambientSwapDex = _ambientSwapDex;
         ambientImpact = _ambientImpact;
         ambientQuery = _ambientQuery;
-        lpParamsConfig = _lpParamsConfig;
+        paramsConfig = _paramsConfig;
     }
 
     function createVault(
@@ -75,7 +75,7 @@ contract TeaVaultAmbientFactory is ITeaVaultAmbientFactory, Initializable, UUPSU
                 ambientSwapDex,
                 ambientImpact,
                 ambientQuery,
-                lpParamsConfig,
+                paramsConfig,
                 _token0,
                 _token1,
                 _poolIdx,
