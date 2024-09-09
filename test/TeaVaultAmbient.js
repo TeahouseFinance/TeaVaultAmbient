@@ -516,48 +516,7 @@ describe("TeaVaultAmbient", function () {
 
             // manager swap back, using CrocSwapDex
             const swapAmount2 = await token1Native.balanceOf(vaultNative);
-            const crocSwapDex = await ethers.getContractAt("ICrocSwapDex", testSwapDex);
-            const abiCoder = ethers.AbiCoder.defaultAbiCoder();
-            const callData = abiCoder.encode(
-                [
-                    "address",
-                    "address",
-                    "uint256", 
-                    "bool", 
-                    "bool",
-                    "uint128",
-                    "uint16",
-                    "uint128",
-                    "uint128",
-                    "uint8"
-                ],
-                [
-                    ZERO_ADDRESS,
-                    token1Native.target,
-                    testPoolIndex,
-                    false,  // sell
-                    false,  // in quote quantity
-                    swapAmount2,
-                    0n,
-                    0n,
-                    0n,
-                    0n
-                ]
-            );
-
-            const crocImpact = await ethers.getContractAt("ICrocImpact", testImpact);
-            const outAmount2 = await crocImpact.calcImpact(
-                ZERO_ADDRESS,
-                token1Native.target,
-                testPoolIndex,
-                false,  // sell
-                false,  // in quote quantity
-                swapAmount2,
-                0n,
-                0n
-            );
-            const swapCallData = crocSwapDex.interface.encodeFunctionData("userCmd", [ 1, callData ]);
-            await vaultNative.connect(manager).executeSwap(false, swapAmount2, -outAmount2[0], crocSwapDex, swapCallData);
+            await vaultNative.connect(manager).ambientSwap(false, swapAmount2, 0);
 
             // withdraw
             const amount0Before = await ethers.provider.getBalance(user);
@@ -839,48 +798,7 @@ describe("TeaVaultAmbient", function () {
 
             // manager swap back, using CrocSwapDex
             const swapAmount2 = await token1ERC20.balanceOf(vaultERC20);
-            const crocSwapDex = await ethers.getContractAt("ICrocSwapDex", testSwapDex);
-            const abiCoder = ethers.AbiCoder.defaultAbiCoder();
-            const callData = abiCoder.encode(
-                [
-                    "address",
-                    "address",
-                    "uint256", 
-                    "bool", 
-                    "bool",
-                    "uint128",
-                    "uint16",
-                    "uint128",
-                    "uint128",
-                    "uint8"
-                ],
-                [
-                    token0ERC20.target,
-                    token1ERC20.target,
-                    testPoolIndex,
-                    false,  // sell
-                    false,  // in quote quantity
-                    swapAmount2,
-                    0n,
-                    0n,
-                    0n,
-                    0n
-                ]
-            );
-
-            const crocImpact = await ethers.getContractAt("ICrocImpact", testImpact);
-            const outAmount2 = await crocImpact.calcImpact(
-                token0ERC20.target,
-                token1ERC20.target,
-                testPoolIndex,
-                false,  // sell
-                false,  // in quote quantity
-                swapAmount2,
-                0n,
-                0n
-            );
-            const swapCallData = crocSwapDex.interface.encodeFunctionData("userCmd", [ 1, callData ]);
-            await vaultERC20.connect(manager).executeSwap(false, swapAmount2, -outAmount2[0], crocSwapDex, swapCallData);
+            await vaultERC20.connect(manager).ambientSwap(false, swapAmount2, 0);
 
             // withdraw
             const amount0Before = await token0ERC20.balanceOf(user);
