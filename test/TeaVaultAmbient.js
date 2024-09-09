@@ -40,7 +40,8 @@ const testBlock = loadEnvVarInt(process.env.AMBIENT_TEST_BLOCK, "No AMBIENT_TEST
 const testSwapDex = loadEnvVar(process.env.AMBIENT_TEST_SWAP_DEX, "No AMBIENT_TEST_SWAP_DEX");
 const testImpact = loadEnvVar(process.env.AMBIENT_TEST_IMPACT, "No AMBIENT_TEST_IMPACT");
 const testQuery = loadEnvVar(process.env.AMBIENT_TEST_QUERY, "No AMBIENT_TEST_QUERY");
-const testCallPath = loadEnvVarInt(process.env.AMBIENT_TEST_CALL_PATH, "No AMBIENT_TEST_CALL_PATH");
+const testSwapCallPath = loadEnvVarInt(process.env.AMBIENT_TEST_SWAP_CALL_PATH, "No AMBIENT_TEST_SWAP_CALL_PATH");
+const testLpCallPath = loadEnvVarInt(process.env.AMBIENT_TEST_LP_CALL_PATH, "No AMBIENT_TEST_LP_CALL_PATH");
 const testMintCode = loadEnvVarInt(process.env.AMBIENT_TEST_MINT_CODE, "No AMBIENT_TEST_MINT_CODE");
 const testBurnCode = loadEnvVarInt(process.env.AMBIENT_TEST_BURN_CODE, "No AMBIENT_TEST_BURN_CODE");
 const testHarvestCode = loadEnvVarInt(process.env.AMBIENT_TEST_HARVEST_CODE, "No AMBIENT_TEST_HARVEST_CODE");
@@ -100,7 +101,8 @@ describe("TeaVaultAmbient", function () {
                 testImpact,
                 testQuery,
                 {
-                    callPath: testCallPath,
+                    swapCallPath: testSwapCallPath,
+                    lpCallPath: testLpCallPath,
                     mintCodeFixedInLiquidityUnits: testMintCode,
                     burnCodeFixedInLiquidityUnits: testBurnCode,
                     harvestCodeAccumulatedFees: testHarvestCode,
@@ -516,48 +518,7 @@ describe("TeaVaultAmbient", function () {
 
             // manager swap back, using CrocSwapDex
             const swapAmount2 = await token1Native.balanceOf(vaultNative);
-            const crocSwapDex = await ethers.getContractAt("ICrocSwapDex", testSwapDex);
-            const abiCoder = ethers.AbiCoder.defaultAbiCoder();
-            const callData = abiCoder.encode(
-                [
-                    "address",
-                    "address",
-                    "uint256", 
-                    "bool", 
-                    "bool",
-                    "uint128",
-                    "uint16",
-                    "uint128",
-                    "uint128",
-                    "uint8"
-                ],
-                [
-                    ZERO_ADDRESS,
-                    token1Native.target,
-                    testPoolIndex,
-                    false,  // sell
-                    false,  // in quote quantity
-                    swapAmount2,
-                    0n,
-                    0n,
-                    0n,
-                    0n
-                ]
-            );
-
-            const crocImpact = await ethers.getContractAt("ICrocImpact", testImpact);
-            const outAmount2 = await crocImpact.calcImpact(
-                ZERO_ADDRESS,
-                token1Native.target,
-                testPoolIndex,
-                false,  // sell
-                false,  // in quote quantity
-                swapAmount2,
-                0n,
-                0n
-            );
-            const swapCallData = crocSwapDex.interface.encodeFunctionData("userCmd", [ 1, callData ]);
-            await vaultNative.connect(manager).executeSwap(false, swapAmount2, -outAmount2[0], crocSwapDex, swapCallData);
+            await vaultNative.connect(manager).ambientSwap(false, swapAmount2, 0);
 
             // withdraw
             const amount0Before = await ethers.provider.getBalance(user);
@@ -839,48 +800,7 @@ describe("TeaVaultAmbient", function () {
 
             // manager swap back, using CrocSwapDex
             const swapAmount2 = await token1ERC20.balanceOf(vaultERC20);
-            const crocSwapDex = await ethers.getContractAt("ICrocSwapDex", testSwapDex);
-            const abiCoder = ethers.AbiCoder.defaultAbiCoder();
-            const callData = abiCoder.encode(
-                [
-                    "address",
-                    "address",
-                    "uint256", 
-                    "bool", 
-                    "bool",
-                    "uint128",
-                    "uint16",
-                    "uint128",
-                    "uint128",
-                    "uint8"
-                ],
-                [
-                    token0ERC20.target,
-                    token1ERC20.target,
-                    testPoolIndex,
-                    false,  // sell
-                    false,  // in quote quantity
-                    swapAmount2,
-                    0n,
-                    0n,
-                    0n,
-                    0n
-                ]
-            );
-
-            const crocImpact = await ethers.getContractAt("ICrocImpact", testImpact);
-            const outAmount2 = await crocImpact.calcImpact(
-                token0ERC20.target,
-                token1ERC20.target,
-                testPoolIndex,
-                false,  // sell
-                false,  // in quote quantity
-                swapAmount2,
-                0n,
-                0n
-            );
-            const swapCallData = crocSwapDex.interface.encodeFunctionData("userCmd", [ 1, callData ]);
-            await vaultERC20.connect(manager).executeSwap(false, swapAmount2, -outAmount2[0], crocSwapDex, swapCallData);
+            await vaultERC20.connect(manager).ambientSwap(false, swapAmount2, 0);
 
             // withdraw
             const amount0Before = await token0ERC20.balanceOf(user);

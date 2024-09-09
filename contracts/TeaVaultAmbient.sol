@@ -708,7 +708,7 @@ contract TeaVaultAmbient is
             )
         );
 
-        (int128 token0Flow, int128 token1Flow, ) = abi.decode(results, (int128, int128, uint128));
+        (int128 token0Flow, int128 token1Flow) = abi.decode(results, (int128, int128));
 
         (paidAmount, receivedAmount) = _zeroForOne ? 
             (_abs(token0Flow), _abs(token1Flow)) :
