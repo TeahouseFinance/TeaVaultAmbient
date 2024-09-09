@@ -61,12 +61,14 @@ interface ITeaVaultAmbient {
     }
 
     /// @notice Params for Ambient LP calls
-    /// @param callPath Call path for userCmd, see proxyPaths for each network : https://github.com/CrocSwap/sdk/blob/main/src/constants.ts
+    /// @param swapCallPath Call path for swap userCmd, see proxyPaths for each network : https://github.com/CrocSwap/sdk/blob/main/src/constants.ts
+    /// @param lpCallPath Call path for lp userCmd, see proxyPaths for each network : https://github.com/CrocSwap/sdk/blob/main/src/constants.ts
     /// @param mintCodeFixedInLiquidityUnits Code for minting concentrated liquidity positions
     /// @param burnCodeFixedInLiquidityUnits Code for removing concentrated liquidity positions
     /// @param harvestCodeAccumulatedFees Code for harvesting concentrated liquidity positions
-    struct LpParamsConfig {
-        uint16 callPath;
+    struct ParamsConfig {
+        uint16 swapCallPath;
+        uint16 lpCallPath;
         uint8 mintCodeFixedInLiquidityUnits;
         uint8 burnCodeFixedInLiquidityUnits;
         uint8 harvestCodeAccumulatedFees;

@@ -48,7 +48,7 @@ contract TeaVaultAmbient is
     ICrocSwapDex public ambientSwapDex;
     ICrocImpact public ambientImpact;
     ICrocQuery public ambientQuery;
-    LpParamsConfig public lpParamsConfig;
+    ParamsConfig public paramsConfig;
     ERC20Upgradeable private token0;
     ERC20Upgradeable private token1;
     uint256 public poolIdx;
@@ -73,7 +73,7 @@ contract TeaVaultAmbient is
         ICrocSwapDex _ambientSwapDex,
         ICrocImpact _ambientImpact,
         ICrocQuery _ambientQuery,
-        LpParamsConfig calldata _lpParamsConfig,
+        ParamsConfig calldata _paramsConfig,
         ERC20Upgradeable _token0,
         ERC20Upgradeable _token1,
         uint256 _poolIdx,
@@ -112,7 +112,7 @@ contract TeaVaultAmbient is
         ambientSwapDex = _ambientSwapDex;
         ambientImpact = _ambientImpact;
         ambientQuery = _ambientQuery;
-        lpParamsConfig = _lpParamsConfig;
+        paramsConfig = _paramsConfig;
         token0 = _token0;
         token1 = _token1;
         poolIdx = _poolIdx;
@@ -509,8 +509,8 @@ contract TeaVaultAmbient is
 
         (amount0, amount1) = _lpCall(
             _value,
-            lpParamsConfig.callPath,
-            lpParamsConfig.mintCodeFixedInLiquidityUnits,
+            paramsConfig.lpCallPath,
+            paramsConfig.mintCodeFixedInLiquidityUnits,
             _tickLower,
             _tickUpper,
             roundUpX12Liquidity.toUint128()
@@ -531,8 +531,8 @@ contract TeaVaultAmbient is
 
         (amount0, amount1) = _lpCall(
             0,
-            lpParamsConfig.callPath,
-            lpParamsConfig.burnCodeFixedInLiquidityUnits,
+            paramsConfig.lpCallPath,
+            paramsConfig.burnCodeFixedInLiquidityUnits,
             _tickLower,
             _tickUpper,
             roundDownX12Liquidity.toUint128()
@@ -544,8 +544,8 @@ contract TeaVaultAmbient is
     function _harvest(int24 _tickLower, int24 _tickUpper) internal returns (uint256 amount0, uint256 amount1) {
         (amount0, amount1) = _lpCall(
             0,
-            lpParamsConfig.callPath,
-            lpParamsConfig.harvestCodeAccumulatedFees,
+            paramsConfig.lpCallPath,
+            paramsConfig.harvestCodeAccumulatedFees,
             _tickLower,
             _tickUpper,
             0
@@ -693,7 +693,7 @@ contract TeaVaultAmbient is
 
         // swap using Ambient pool
         bytes memory results = ambientSwapDex.userCmd{value:_maxPaidAmount}(
-            1,
+            paramsConfig.swapCallPath,
             abi.encode(
                 token0,
                 token1,
