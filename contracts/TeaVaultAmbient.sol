@@ -242,7 +242,7 @@ contract TeaVaultAmbient is
         ERC20Upgradeable _token0 = token0;
         ERC20Upgradeable _token1 = token1;
         bool isToken0Native = _token0.isNative();
-        if (isToken0Native && msg.value != 0) revert ValueShouldBeZero();
+        if (!isToken0Native && msg.value != 0) revert ValueShouldBeZero();
 
         if (totalShares == 0) {
             // vault is empty, default to 1:1 share to token0 ratio (offseted by _decimalOffset)
@@ -274,6 +274,11 @@ contract TeaVaultAmbient is
                 position.liquidity += liquidity.toUint128();
                 depositedAmount0 += amount0;
                 depositedAmount1 += amount1;
+
+                if (value > 0) {
+                    // token0 is native, reduce value by deposited amount
+                    value -= amount0;
+                }
             }
             _token0.nonNativeApprove(_ambientSwapDex, 0);
             _token1.nonNativeApprove(_ambientSwapDex, 0);
@@ -498,16 +503,20 @@ contract TeaVaultAmbient is
         uint256 amount0,
         uint256 amount1
     ) {
+        // make sure the last 11bits to be zero to prevent "FD" error from Ambient
+        uint256 roundUpX12Liquidity = (_liquidity >> 11) << 11;
+        roundUpX12Liquidity = roundUpX12Liquidity < _liquidity ? roundUpX12Liquidity + (1 << 11) : roundUpX12Liquidity;
+
         (amount0, amount1) = _lpCall(
             _value,
             lpParamsConfig.callPath,
             lpParamsConfig.mintCodeFixedInLiquidityUnits,
             _tickLower,
             _tickUpper,
-            _liquidity.toUint128()
+            roundUpX12Liquidity.toUint128()
         );
 
-        emit AddLiquidity(_tickLower, _tickUpper, _liquidity, amount0, amount1);
+        emit AddLiquidity(_tickLower, _tickUpper, roundUpX12Liquidity, amount0, amount1);
     }
 
     function _removeLiquidity(
@@ -518,16 +527,18 @@ contract TeaVaultAmbient is
         uint256 amount0,
         uint256 amount1
     ) {
+        uint256 roundDownX12Liquidity = (_liquidity >> 11) << 11;
+
         (amount0, amount1) = _lpCall(
             0,
             lpParamsConfig.callPath,
             lpParamsConfig.burnCodeFixedInLiquidityUnits,
             _tickLower,
             _tickUpper,
-            _liquidity.toUint128()
+            roundDownX12Liquidity.toUint128()
         );
 
-        emit RemoveLiquidity(_tickLower, _tickUpper, _liquidity, amount0, amount1);
+        emit RemoveLiquidity(_tickLower, _tickUpper, roundDownX12Liquidity, amount0, amount1);
     }
 
     function _harvest(int24 _tickLower, int24 _tickUpper) internal returns (uint256 amount0, uint256 amount1) {
@@ -685,7 +696,7 @@ contract TeaVaultAmbient is
             _zeroForOne,
             _maxPaidAmount.toUint128(),
             0,
-            0
+            _zeroForOne ? type(uint128).max : 0     // when buying, priceLimit is upper bound
         );
 
         (ERC20Upgradeable src, ERC20Upgradeable dst, uint256 baselineAmount) = _zeroForOne ? 
@@ -699,7 +710,7 @@ contract TeaVaultAmbient is
         src.safeUniversalTransfer(address(_swapRelayer), _maxPaidAmount);
 
         _swapRelayer.swap(src, dst, _maxPaidAmount, _swapRouter, _data);
-        
+
         uint256 srcBalanceAfter = src.getBalance(address(this));
         uint256 dstBalanceAfter = dst.getBalance(address(this));
         paidAmount = srcBalanceBefore - srcBalanceAfter;
