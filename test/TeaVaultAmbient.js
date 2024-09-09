@@ -390,7 +390,127 @@ describe("TeaVaultAmbient", function () {
         });
     });
 
-    describe("Manager functions with native token", function() {        
+    describe("Manager functions with native token", function() {
+        it("Should be able to do in-pool swap", async function() {
+            const { user, manager, vaultNative, token1Native } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+
+            // deposit
+            const token0Decimals = NATIVE_DECIMALS;
+            const vaultDecimals = await vaultNative.decimals();
+            const shares = ethers.parseUnits("1", vaultDecimals);
+            const token0Amount = ethers.parseUnits("1", token0Decimals);
+            await vaultNative.connect(user).deposit(shares, token0Amount, 0n, { value: token0Amount });
+
+            // manager swap, using Ambient
+            const swapAmount = token0Amount / 2n;
+            const amounts = await vaultNative.connect(manager).ambientSwap.staticCall(true, swapAmount, 0n);
+            expect(amounts[0]).to.lte(swapAmount);
+            const outAmount = amounts[1];
+            await vaultNative.connect(manager).ambientSwap(true, swapAmount, 0n);
+
+            const amount0AfterSwap = await ethers.provider.getBalance(vaultNative);
+            const amount1AfterSwap = await token1Native.balanceOf(vaultNative);
+            expect(amount0AfterSwap).to.gte(token0Amount - swapAmount); // should use swapAmount or less
+            expect(amount1AfterSwap).to.gte(outAmount); // should receive outAmount or more
+        });
+
+        it("Should not be able to do in-pool swap with wrong slippage", async function() {
+            const { user, manager, vaultNative } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+
+            // deposit
+            const token0Decimals = NATIVE_DECIMALS;
+            const vaultDecimals = await vaultNative.decimals();
+            const shares = ethers.parseUnits("1", vaultDecimals);
+            const token0Amount = ethers.parseUnits("1", token0Decimals);
+            await vaultNative.connect(user).deposit(shares, token0Amount, 0n, { value: token0Amount });
+
+            // manager swap, using Ambient
+            const swapAmount = token0Amount / 2n;
+            const amounts = await vaultNative.connect(manager).ambientSwap.staticCall(true, swapAmount, 0n);
+            expect(amounts[0]).to.lte(swapAmount);
+            const outAmount = amounts[1];
+            await expect(vaultNative.connect(manager).ambientSwap(true, swapAmount, outAmount + 1n))
+            .to.be.reverted; // likely to be reverted in Ambient
+        });
+
+        it("Should not be able to swap using 3rd party pool with wrong slippage", async function() {
+            const { user, manager, vaultNative, token1Native } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+
+            // deposit
+            const token0Decimals = NATIVE_DECIMALS;
+            const vaultDecimals = await vaultNative.decimals();
+            const shares = ethers.parseUnits("1", vaultDecimals);
+            const token0Amount = ethers.parseUnits("1", token0Decimals);
+            await vaultNative.connect(user).deposit(shares, token0Amount, 0n, { value: token0Amount });
+
+            // manager swap, using UniswapV3
+            const v3Router = new ethers.Contract(testRouter, UniswapV3SwapRouterABI, ethers.provider);
+            const weth9 = await v3Router.WETH9();
+            const swapAmount = token0Amount / 2n;
+            const swapRelayer = await vaultNative.swapRelayer();
+            const swapParams = [
+                weth9,
+                token1Native.target,
+                500,
+                swapRelayer,
+                UINT64_MAX,
+                swapAmount,
+                0n,
+                0n
+            ];
+            const outAmount = await v3Router.connect(user).exactInputSingle.staticCall(swapParams, { value: swapAmount });
+            const uniswapV3SwapData = v3Router.interface.encodeFunctionData("exactInputSingle", [ swapParams ]);
+            await expect(vaultNative.connect(manager).executeSwap(true, swapAmount, outAmount + 1n, v3Router.target, uniswapV3SwapData))
+            .to.be.revertedWithCustomError(vaultNative, "InsufficientSwapResult");
+        });
+
+        it("Should not be able to do in-pool swap from non-manager", async function() {
+            const { user, manager, vaultNative } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+
+            // deposit
+            const token0Decimals = NATIVE_DECIMALS;
+            const vaultDecimals = await vaultNative.decimals();
+            const shares = ethers.parseUnits("1", vaultDecimals);
+            const token0Amount = ethers.parseUnits("1", token0Decimals);
+            await vaultNative.connect(user).deposit(shares, token0Amount, 0n, { value: token0Amount });
+
+            // manager swap, using Ambient
+            const swapAmount = token0Amount / 2n;
+            await expect(vaultNative.connect(user).ambientSwap(true, swapAmount, 0n))
+            .to.be.revertedWithCustomError(vaultNative, "CallerIsNotManager");
+        });
+
+        it("Should not be able to swap using 3rd party pool from non-manager", async function() {
+            const { treasury, user, manager, vaultNative, token1Native } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+
+            // deposit
+            const token0Decimals = NATIVE_DECIMALS;
+            const vaultDecimals = await vaultNative.decimals();
+            const shares = ethers.parseUnits("1", vaultDecimals);
+            const token0Amount = ethers.parseUnits("1", token0Decimals);
+            await vaultNative.connect(user).deposit(shares, token0Amount, 0n, { value: token0Amount });
+
+            // manager swap, using UniswapV3
+            const v3Router = new ethers.Contract(testRouter, UniswapV3SwapRouterABI, ethers.provider);
+            const weth9 = await v3Router.WETH9();
+            const swapAmount = token0Amount / 2n;
+            const swapRelayer = await vaultNative.swapRelayer();
+            const swapParams = [
+                weth9,
+                token1Native.target,
+                500,
+                swapRelayer,
+                UINT64_MAX,
+                swapAmount,
+                0n,
+                0n
+            ];
+            const outAmount = await v3Router.connect(user).exactInputSingle.staticCall(swapParams, { value: swapAmount });
+            const uniswapV3SwapData = v3Router.interface.encodeFunctionData("exactInputSingle", [ swapParams ]);
+            await expect(vaultNative.connect(user).executeSwap(true, swapAmount, outAmount + 1n, v3Router.target, uniswapV3SwapData))
+            .to.be.revertedWithCustomError(vaultNative, "CallerIsNotManager");
+        });
+
         it("Should be able to swap, add liquidity, remove liquidity, and withdraw", async function() {
             const { treasury, user, manager, vaultNative, token1Native } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
 
@@ -670,7 +790,132 @@ describe("TeaVaultAmbient", function () {
         });
     });
 
-    describe("Manager functions with ERC20 tokens", function() {        
+    describe("Manager functions with ERC20 tokens", function() {
+        it("Should be able to do in-pool swap", async function() {
+            const { user, manager, vaultERC20, token0ERC20, token1ERC20 } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+
+            // deposit
+            const token0Decimals = await token0ERC20.decimals();
+            const vaultDecimals = await vaultERC20.decimals();
+            const shares = ethers.parseUnits("1", vaultDecimals);
+            const token0Amount = ethers.parseUnits("1", token0Decimals);
+            await token0ERC20.connect(user).approve(vaultERC20, token0Amount);
+            await vaultERC20.connect(user).deposit(shares, token0Amount, 0n);
+
+            // manager swap, using Ambient
+            const swapAmount = token0Amount / 2n;
+            const amounts = await vaultERC20.connect(manager).ambientSwap.staticCall(true, swapAmount, 0n);
+            expect(amounts[0]).to.lte(swapAmount);
+            const outAmount = amounts[1];
+            await vaultERC20.connect(manager).ambientSwap(true, swapAmount, 0n);
+
+            const amount0AfterSwap = await token0ERC20.balanceOf(vaultERC20);
+            const amount1AfterSwap = await token1ERC20.balanceOf(vaultERC20);
+            expect(amount0AfterSwap).to.gte(token0Amount - swapAmount); // should use swapAmount or less
+            expect(amount1AfterSwap).to.gte(outAmount); // should receive outAmount or more
+        });
+
+        it("Should not be able to do in-pool swap with wrong slippage", async function() {
+            const { user, manager, vaultERC20, token0ERC20 } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+
+            // deposit
+            const token0Decimals = await token0ERC20.decimals();
+            const vaultDecimals = await vaultERC20.decimals();
+            const shares = ethers.parseUnits("1", vaultDecimals);
+            const token0Amount = ethers.parseUnits("1", token0Decimals);
+            await token0ERC20.connect(user).approve(vaultERC20, token0Amount);
+            await vaultERC20.connect(user).deposit(shares, token0Amount, 0n);
+
+            // manager swap, using Ambient
+            const swapAmount = token0Amount / 2n;
+            const amounts = await vaultERC20.connect(manager).ambientSwap.staticCall(true, swapAmount, 0n);
+            expect(amounts[0]).to.lte(swapAmount);
+            const outAmount = amounts[1];
+            await expect(vaultERC20.connect(manager).ambientSwap(true, swapAmount, outAmount + 1n))
+            .to.be.reverted; // likely to be reverted in Ambient
+        });
+
+        it("Should not be able to swap using 3rd party pool with wrong slippage", async function() {
+            const { user, manager, vaultERC20, token0ERC20, token1ERC20 } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+
+            // deposit
+            const token0Decimals = await token0ERC20.decimals();
+            const vaultDecimals = await vaultERC20.decimals();
+            const shares = ethers.parseUnits("1", vaultDecimals);
+            const token0Amount = ethers.parseUnits("1", token0Decimals);
+            await token0ERC20.connect(user).approve(vaultERC20, token0Amount);
+            await vaultERC20.connect(user).deposit(shares, token0Amount, 0n);
+
+            // manager swap, using UniswapV3
+            const v3Router = new ethers.Contract(testRouter, UniswapV3SwapRouterABI, ethers.provider);
+            const weth9 = await v3Router.WETH9();
+            const swapAmount = token0Amount / 2n;
+            const swapRelayer = await vaultERC20.swapRelayer();
+            const swapParams = [
+                weth9,
+                token1ERC20.target,
+                500,
+                swapRelayer,
+                UINT64_MAX,
+                swapAmount,
+                0n,
+                0n
+            ];
+            const outAmount = await v3Router.connect(user).exactInputSingle.staticCall(swapParams, { value: swapAmount });
+            const uniswapV3SwapData = v3Router.interface.encodeFunctionData("exactInputSingle", [ swapParams ]);
+            await expect(vaultERC20.connect(manager).executeSwap(true, swapAmount, outAmount + 1n, v3Router.target, uniswapV3SwapData))
+            .to.be.reverted; // could be reverted in pool or in vault
+        });
+
+        it("Should not be able to do in-pool swap from non-manager", async function() {
+            const { user, vaultERC20, token0ERC20 } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+
+            // deposit
+            const token0Decimals = await token0ERC20.decimals();
+            const vaultDecimals = await vaultERC20.decimals();
+            const shares = ethers.parseUnits("1", vaultDecimals);
+            const token0Amount = ethers.parseUnits("1", token0Decimals);
+            await token0ERC20.connect(user).approve(vaultERC20, token0Amount);
+            await vaultERC20.connect(user).deposit(shares, token0Amount, 0n);
+
+            // manager swap, using Ambient
+            const swapAmount = token0Amount / 2n;
+            await expect(vaultERC20.connect(user).ambientSwap(true, swapAmount, 0n))
+            .to.be.revertedWithCustomError(vaultERC20, "CallerIsNotManager");
+        });
+
+        it("Should not be able to swap using 3rd party pool from non-manager", async function() {
+            const { user, vaultERC20, token0ERC20, token1ERC20 } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+
+            // deposit
+            const token0Decimals = NATIVE_DECIMALS;
+            const vaultDecimals = await vaultERC20.decimals();
+            const shares = ethers.parseUnits("1", vaultDecimals);
+            const token0Amount = ethers.parseUnits("1", token0Decimals);
+            await token0ERC20.connect(user).approve(vaultERC20, token0Amount);
+            await vaultERC20.connect(user).deposit(shares, token0Amount, 0n);
+
+            // manager swap, using UniswapV3
+            const v3Router = new ethers.Contract(testRouter, UniswapV3SwapRouterABI, ethers.provider);
+            const weth9 = await v3Router.WETH9();
+            const swapAmount = token0Amount / 2n;
+            const swapRelayer = await vaultERC20.swapRelayer();
+            const swapParams = [
+                weth9,
+                token1ERC20.target,
+                500,
+                swapRelayer,
+                UINT64_MAX,
+                swapAmount,
+                0n,
+                0n
+            ];
+            const outAmount = await v3Router.connect(user).exactInputSingle.staticCall(swapParams, { value: swapAmount });
+            const uniswapV3SwapData = v3Router.interface.encodeFunctionData("exactInputSingle", [ swapParams ]);
+            await expect(vaultERC20.connect(user).executeSwap(true, swapAmount, outAmount + 1n, v3Router.target, uniswapV3SwapData))
+            .to.be.revertedWithCustomError(vaultERC20, "CallerIsNotManager");
+        });
+
         it("Should be able to swap, add liquidity, remove liquidity, and withdraw", async function() {
             const { treasury, user, manager, vaultERC20, token0ERC20, token1ERC20 } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
 

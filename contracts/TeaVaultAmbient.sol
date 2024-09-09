@@ -702,7 +702,7 @@ contract TeaVaultAmbient is
                 _zeroForOne,
                 _maxPaidAmount,
                 0,
-                0,
+                _zeroForOne ? type(uint128).max : 0,     // when buying, priceLimit is upper bound
                 _minReceivedAmount,
                 0
             )
