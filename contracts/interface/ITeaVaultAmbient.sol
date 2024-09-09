@@ -227,8 +227,23 @@ interface ITeaVaultAmbient {
     /// @return collectedShares Share amount collected by minting
     function collectManagementFee() external returns (uint256 collectedShares);
 
+    /// @notice Execute in-pool swap
+    /// @param zeroForOne Swap direction, true if paying token0 for token1, false if otherwise
+    /// @param maxPaidAmount Maximum paid amount
+    /// @param minReceivedAmount Minimum received amount
+    /// @return paidAmount Paid amount
+    /// @return receivedAmount Received amount
+    function ambientSwap(
+        bool zeroForOne,
+        uint256 maxPaidAmount,
+        uint256 minReceivedAmount
+    ) external returns (
+        uint256 paidAmount,
+        uint256 receivedAmount
+    );
+
     /// @notice Execute swap from any router via swap relayer
-    /// @param zeroForOne Swap direction
+    /// @param zeroForOne Swap direction, true if paying token0 for token1, false if otherwise
     /// @param maxPaidAmount Maximum paid amount
     /// @param minReceivedAmount Minimum received amount
     /// @param swapRouter Swap router

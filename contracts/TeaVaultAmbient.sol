@@ -674,6 +674,50 @@ contract TeaVaultAmbient is
     }
 
     /// @inheritdoc ITeaVaultAmbient
+    function ambientSwap(
+        bool _zeroForOne,
+        uint256 _maxPaidAmount,
+        uint256 _minReceivedAmount
+    ) external override nonReentrant onlyManager returns (
+        uint256 paidAmount,
+        uint256 receivedAmount
+    ) {
+        ERC20Upgradeable _src = _zeroForOne ? token0 : token1;
+        ERC20Upgradeable _dst = _zeroForOne ? token1 : token0;
+
+        bool isSrcNative = _src.isNative();
+        if (!isSrcNative) {
+            _src.approve(address(ambientSwapDex), _maxPaidAmount);
+            _maxPaidAmount = 0;
+        }
+
+        // swap using Ambient pool
+        bytes memory results = ambientSwapDex.userCmd{value:_maxPaidAmount}(
+            1,
+            abi.encode(
+                token0,
+                token1,
+                poolIdx,
+                _zeroForOne,
+                _zeroForOne,
+                _maxPaidAmount,
+                0,
+                0,
+                _minReceivedAmount,
+                0
+            )
+        );
+
+        (int128 token0Flow, int128 token1Flow, ) = abi.decode(results, (int128, int128, uint128));
+
+        (paidAmount, receivedAmount) = _zeroForOne ? 
+            (_abs(token0Flow), _abs(token1Flow)) :
+            (_abs(token1Flow), _abs(token0Flow));
+
+        emit Swap(msg.sender, _src, _dst, block.timestamp, address(ambientSwapDex), paidAmount, receivedAmount);
+    }
+
+    /// @inheritdoc ITeaVaultAmbient
     function executeSwap(
         bool _zeroForOne,
         uint256 _maxPaidAmount,
@@ -700,8 +744,8 @@ contract TeaVaultAmbient is
         );
 
         (ERC20Upgradeable src, ERC20Upgradeable dst, uint256 baselineAmount) = _zeroForOne ? 
-            (_token0, _token1, _abs(-token1Flow)) : 
-            (_token1, _token0, _abs(-token0Flow));
+            (_token0, _token1, _abs(token1Flow)) : 
+            (_token1, _token0, _abs(token0Flow));
 
         uint256 srcBalanceBefore = src.getBalance(address(this));
         uint256 dstBalanceBefore = dst.getBalance(address(this));
