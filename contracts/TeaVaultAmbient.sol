@@ -686,35 +686,65 @@ contract TeaVaultAmbient is
         ERC20Upgradeable _dst = _zeroForOne ? token1 : token0;
 
         bool isSrcNative = _src.isNative();
+        uint256 value = _maxPaidAmount;
         if (!isSrcNative) {
             _src.approve(address(ambientSwapDex), _maxPaidAmount);
-            _maxPaidAmount = 0;
+            value = 0;
         }
 
         // swap using Ambient pool
-        bytes memory results = ambientSwapDex.userCmd{value:_maxPaidAmount}(
-            paramsConfig.swapCallPath,
-            abi.encode(
-                token0,
-                token1,
-                poolIdx,
-                _zeroForOne,
-                _zeroForOne,
-                _maxPaidAmount,
-                0,
-                _zeroForOne ? type(uint128).max : 0,     // when buying, priceLimit is upper bound
-                _minReceivedAmount,
-                0
-            )
+        (int128 token0Flow, int128 token1Flow) = _ambientSwap(
+            value,
+            address(token0),
+            address(token1),
+            poolIdx,
+            _zeroForOne,
+            _zeroForOne,
+            _maxPaidAmount.toUint128(),
+            0,
+            _zeroForOne ? type(uint128).max : 65538,     // when buying, priceLimit is upper bound
+            _minReceivedAmount.toUint128(),
+            0
         );
-
-        (int128 token0Flow, int128 token1Flow) = abi.decode(results, (int128, int128));
 
         (paidAmount, receivedAmount) = _zeroForOne ? 
             (_abs(token0Flow), _abs(token1Flow)) :
             (_abs(token1Flow), _abs(token0Flow));
 
         emit Swap(msg.sender, _src, _dst, block.timestamp, address(ambientSwapDex), paidAmount, receivedAmount);
+    }
+
+    function _ambientSwap(
+        uint256 _value,
+        address _baseToken,
+        address _quoteToken,
+        uint256 _poolIdx,
+        bool _isBuy,
+        bool _isBaseQty,
+        uint128 _qty,
+        uint16 _tip,
+        uint128 _limitPrice,
+        uint128 _minOut,
+        uint8 _settleFlags
+    ) internal returns (int128 baseFlow, int128 quoteFlow) {
+        // swap using Ambient pool
+        bytes memory results = ambientSwapDex.userCmd{value:_value}(
+            paramsConfig.swapCallPath,
+            abi.encode(
+                _baseToken,
+                _quoteToken,
+                _poolIdx,
+                _isBuy,
+                _isBaseQty,
+                _qty,
+                _tip,
+                _limitPrice,
+                _minOut,
+                _settleFlags
+            )
+        );
+
+        (baseFlow, quoteFlow) = abi.decode(results, (int128, int128));
     }
 
     /// @inheritdoc ITeaVaultAmbient
@@ -740,7 +770,7 @@ contract TeaVaultAmbient is
             _zeroForOne,
             _maxPaidAmount.toUint128(),
             0,
-            _zeroForOne ? type(uint128).max : 0     // when buying, priceLimit is upper bound
+            _zeroForOne ? type(uint128).max : 65538     // when buying, priceLimit is upper bound
         );
 
         (ERC20Upgradeable src, ERC20Upgradeable dst, uint256 baselineAmount) = _zeroForOne ? 

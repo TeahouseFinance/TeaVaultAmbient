@@ -403,10 +403,10 @@ describe("TeaVaultAmbient", function () {
 
             // manager swap, using Ambient
             const swapAmount = token0Amount / 2n;
-            const amounts = await vaultNative.connect(manager).ambientSwap.staticCall(true, swapAmount, 0n);
+            const amounts = await vaultNative.connect(manager).ambientSwap.staticCall(true, swapAmount, 1n);
             expect(amounts[0]).to.lte(swapAmount);
             const outAmount = amounts[1];
-            await vaultNative.connect(manager).ambientSwap(true, swapAmount, 0n);
+            await vaultNative.connect(manager).ambientSwap(true, swapAmount, 1n);
 
             const amount0AfterSwap = await ethers.provider.getBalance(vaultNative);
             const amount1AfterSwap = await token1Native.balanceOf(vaultNative);
@@ -426,7 +426,7 @@ describe("TeaVaultAmbient", function () {
 
             // manager swap, using Ambient
             const swapAmount = token0Amount / 2n;
-            const amounts = await vaultNative.connect(manager).ambientSwap.staticCall(true, swapAmount, 0n);
+            const amounts = await vaultNative.connect(manager).ambientSwap.staticCall(true, swapAmount, 1n);
             expect(amounts[0]).to.lte(swapAmount);
             const outAmount = amounts[1];
             await expect(vaultNative.connect(manager).ambientSwap(true, swapAmount, outAmount + 1n))
@@ -476,7 +476,7 @@ describe("TeaVaultAmbient", function () {
 
             // manager swap, using Ambient
             const swapAmount = token0Amount / 2n;
-            await expect(vaultNative.connect(user).ambientSwap(true, swapAmount, 0n))
+            await expect(vaultNative.connect(user).ambientSwap(true, swapAmount, 1n))
             .to.be.revertedWithCustomError(vaultNative, "CallerIsNotManager");
         });
 
@@ -638,7 +638,7 @@ describe("TeaVaultAmbient", function () {
 
             // manager swap back, using CrocSwapDex
             const swapAmount2 = await token1Native.balanceOf(vaultNative);
-            await vaultNative.connect(manager).ambientSwap(false, swapAmount2, 0);
+            await vaultNative.connect(manager).ambientSwap(false, swapAmount2, 1n);
 
             // withdraw
             const amount0Before = await ethers.provider.getBalance(user);
@@ -804,10 +804,10 @@ describe("TeaVaultAmbient", function () {
 
             // manager swap, using Ambient
             const swapAmount = token0Amount / 2n;
-            const amounts = await vaultERC20.connect(manager).ambientSwap.staticCall(true, swapAmount, 0n);
+            const amounts = await vaultERC20.connect(manager).ambientSwap.staticCall(true, swapAmount, 1n);
             expect(amounts[0]).to.lte(swapAmount);
             const outAmount = amounts[1];
-            await vaultERC20.connect(manager).ambientSwap(true, swapAmount, 0n);
+            await vaultERC20.connect(manager).ambientSwap(true, swapAmount, 1n);
 
             const amount0AfterSwap = await token0ERC20.balanceOf(vaultERC20);
             const amount1AfterSwap = await token1ERC20.balanceOf(vaultERC20);
@@ -828,7 +828,7 @@ describe("TeaVaultAmbient", function () {
 
             // manager swap, using Ambient
             const swapAmount = token0Amount / 2n;
-            const amounts = await vaultERC20.connect(manager).ambientSwap.staticCall(true, swapAmount, 0n);
+            const amounts = await vaultERC20.connect(manager).ambientSwap.staticCall(true, swapAmount, 1n);
             expect(amounts[0]).to.lte(swapAmount);
             const outAmount = amounts[1];
             await expect(vaultERC20.connect(manager).ambientSwap(true, swapAmount, outAmount + 1n))
@@ -880,7 +880,7 @@ describe("TeaVaultAmbient", function () {
 
             // manager swap, using Ambient
             const swapAmount = token0Amount / 2n;
-            await expect(vaultERC20.connect(user).ambientSwap(true, swapAmount, 0n))
+            await expect(vaultERC20.connect(user).ambientSwap(true, swapAmount, 1n))
             .to.be.revertedWithCustomError(vaultERC20, "CallerIsNotManager");
         });
 
@@ -1045,7 +1045,7 @@ describe("TeaVaultAmbient", function () {
 
             // manager swap back, using CrocSwapDex
             const swapAmount2 = await token1ERC20.balanceOf(vaultERC20);
-            await vaultERC20.connect(manager).ambientSwap(false, swapAmount2, 0);
+            await vaultERC20.connect(manager).ambientSwap(false, swapAmount2, 1n);
 
             // withdraw
             const amount0Before = await token0ERC20.balanceOf(user);
