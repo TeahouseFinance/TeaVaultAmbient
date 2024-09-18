@@ -702,7 +702,7 @@ contract TeaVaultAmbient is
             _zeroForOne,
             _maxPaidAmount.toUint128(),
             0,
-            _zeroForOne ? type(uint128).max : 65538,     // when buying, priceLimit is upper bound
+            _zeroForOne ? 21267430153580247136652501917186561137 : 65538,     // do not care about price limit, use recommended max values
             _minReceivedAmount.toUint128(),
             0
         );
@@ -770,7 +770,7 @@ contract TeaVaultAmbient is
             _zeroForOne,
             _maxPaidAmount.toUint128(),
             0,
-            _zeroForOne ? type(uint128).max : 65538     // when buying, priceLimit is upper bound
+            _zeroForOne ? 21267430153580247136652501917186561137 : 65538    // do not care about price limit, use recommended max values
         );
 
         (ERC20Upgradeable src, ERC20Upgradeable dst, uint256 baselineAmount) = _zeroForOne ? 
