@@ -637,6 +637,7 @@ contract TeaVaultAmbient is
                 emit ManagementFeeCollected(collectedShares);
             }
 
+            // Charge 0 management fee and initialize lastCollectManagementFee in the first deposit
             lastCollectManagementFee = block.timestamp;
         }
     }
