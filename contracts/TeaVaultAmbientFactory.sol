@@ -60,7 +60,7 @@ contract TeaVaultAmbientFactory is ITeaVaultAmbientFactory, Initializable, UUPSU
         address _manager,
         uint24 _feeCap,
         TeaVaultAmbient.FeeConfig calldata _feeConfig
-    ) external returns (
+    ) external onlyOwner returns (
         address deployedAddress
     ) {
         deployedAddress = address(new BeaconProxy(
