@@ -56,6 +56,8 @@ contract TeaVaultAmbient is
     FeeConfig public feeConfig;
     Position[] public positions;
     uint256 public lastCollectManagementFee;
+
+    uint256[31] private __gap;
     
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {

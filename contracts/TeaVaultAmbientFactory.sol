@@ -23,6 +23,8 @@ contract TeaVaultAmbientFactory is ITeaVaultAmbientFactory, Initializable, UUPSU
     address public ambientQuery;
     TeaVaultAmbient.ParamsConfig public paramsConfig;
 
+    uint256[44] private __gap;
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
