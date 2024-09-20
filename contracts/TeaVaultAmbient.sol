@@ -757,9 +757,9 @@ contract TeaVaultAmbient is
         bool _zeroForOne,
         uint256 _maxPaidAmount,
         uint256 _minReceivedAmount,
+        uint64 _deadline,
         address _swapRouter,
-        bytes calldata _data,
-        uint64 _deadline
+        bytes calldata _data
     ) external override nonReentrant onlyManager checkDeadline(_deadline) returns (
         uint256 paidAmount,
         uint256 receivedAmount

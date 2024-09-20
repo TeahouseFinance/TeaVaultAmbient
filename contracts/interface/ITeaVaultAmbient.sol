@@ -250,18 +250,18 @@ interface ITeaVaultAmbient {
     /// @param zeroForOne Swap direction, true if paying token0 for token1, false if otherwise
     /// @param maxPaidAmount Maximum paid amount
     /// @param minReceivedAmount Minimum received amount
+    /// @param deadline Deadline of the transaction (transaction will revert if after this timestamp)
     /// @param swapRouter Swap router
     /// @param data Calldata for swap router
-    /// @param deadline Deadline of the transaction (transaction will revert if after this timestamp)
     /// @return paidAmount Paid amount
     /// @return receivedAmount Received amount
     function executeSwap(
         bool zeroForOne,
         uint256 maxPaidAmount,
         uint256 minReceivedAmount,
+        uint64 deadline,
         address swapRouter,
-        bytes calldata data,
-        uint64 deadline
+        bytes calldata data
     ) external returns (
         uint256 paidAmount,
         uint256 receivedAmount
