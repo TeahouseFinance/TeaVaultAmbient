@@ -678,8 +678,9 @@ contract TeaVaultAmbient is
     function ambientSwap(
         bool _zeroForOne,
         uint256 _maxPaidAmount,
-        uint256 _minReceivedAmount
-    ) external override nonReentrant onlyManager returns (
+        uint256 _minReceivedAmount,
+        uint64 _deadline
+    ) external override nonReentrant onlyManager checkDeadline(_deadline) returns (
         uint256 paidAmount,
         uint256 receivedAmount
     ) {
@@ -754,8 +755,9 @@ contract TeaVaultAmbient is
         uint256 _maxPaidAmount,
         uint256 _minReceivedAmount,
         address _swapRouter,
-        bytes calldata _data
-    ) external override nonReentrant onlyManager returns (
+        bytes calldata _data,
+        uint64 _deadline
+    ) external override nonReentrant onlyManager checkDeadline(_deadline) returns (
         uint256 paidAmount,
         uint256 receivedAmount
     ) {
