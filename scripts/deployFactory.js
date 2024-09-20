@@ -16,7 +16,7 @@ function loadEnvVarInt(env, errorMsg) {
     return parseInt(env);
 }
 
-const owner = loadEnvVar(process.env.OWNER, "No OWNER");;
+const owner = loadEnvVar(process.env.OWNER, "No OWNER");
 const swapDex = loadEnvVar(process.env.AMBIENT_SWAP_DEX, "No AMBIENT_SWAP_DEX");
 const impact = loadEnvVar(process.env.AMBIENT_IMPACT, "No AMBIENT_IMPACT");
 const query = loadEnvVar(process.env.AMBIENT_QUERY, "No AMBIENT_QUERY");
@@ -26,9 +26,13 @@ const mintCode = loadEnvVarInt(process.env.AMBIENT_MINT_CODE, "No AMBIENT_MINT_C
 const burnCode = loadEnvVarInt(process.env.AMBIENT_BURN_CODE, "No AMBIENT_BURN_CODE");
 const harvestCode = loadEnvVarInt(process.env.AMBIENT_HARVEST_CODE, "No AMBIENT_HARVEST_CODE");
 
+const waitTime = 20000
+const sleep = (delay) => new Promise((resolve) => setTimeout(resolve, delay))
+
 async function main() {
     const TeaVaultAmbient = await ethers.getContractFactory("TeaVaultAmbient");
     const ambientBeacon = await upgrades.deployBeacon(TeaVaultAmbient);
+    await sleep(waitTime);
 
     const TeaVaultAmbientFactory = await ethers.getContractFactory("TeaVaultAmbientFactory");
     const teaVaultAmbientFactory = await upgrades.deployProxy(

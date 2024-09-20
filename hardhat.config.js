@@ -27,6 +27,7 @@ module.exports = {
     scroll: {
       url: process.env.SCROLL_URL || "",
       accounts: process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+      gasPrice: 150000000
     },
     arb: {
       url: process.env.ARB_URL || "",
