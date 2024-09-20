@@ -914,8 +914,8 @@ contract TeaVaultAmbient is
         uint256 amount
     ) {
         amount = _isRoundingUp ? 
-            _assetAmount.mulDiv(_shares, _totalShares) :
-            _assetAmount.mulDivRoundingUp(_shares, _totalShares);
+            _assetAmount.mulDivRoundingUp(_shares, _totalShares) :
+            _assetAmount.mulDiv(_shares, _totalShares);
     }
 
     function _fractionOfFees(uint256 _baseAmount, uint32 _feeRate) internal view returns (uint256 fee) {
