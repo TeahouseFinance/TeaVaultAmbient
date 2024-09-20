@@ -708,6 +708,7 @@ contract TeaVaultAmbient is
             _minReceivedAmount.toUint128(),
             0
         );
+        _src.nonNativeApprove(address(ambientSwapDex), 0);
 
         (paidAmount, receivedAmount) = _zeroForOne ? 
             (_abs(token0Flow), _abs(token1Flow)) :
