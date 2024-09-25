@@ -113,7 +113,7 @@ describe("TeaVaultAmbient", function () {
                     harvestCodeAccumulatedFees: testHarvestCode,
                 },
             ]
-        );
+        );        
 
         // create native pool
         const txNative = await teaVaultAmbientFactory.createVault(
@@ -125,7 +125,7 @@ describe("TeaVaultAmbient", function () {
             testToken1Native,
             testPoolIndex,
             manager.address,
-            999999,
+            300000,
             {
                 treasury: treasury.address,
                 entryFee: 0,
@@ -148,7 +148,7 @@ describe("TeaVaultAmbient", function () {
             testToken1ERC20,
             testPoolIndex,
             manager.address,
-            999999,
+            300000,
             {
                 treasury: treasury.address,
                 entryFee: 0,
@@ -446,12 +446,13 @@ describe("TeaVaultAmbient", function () {
             const v3Router = new ethers.Contract(testRouter, UniswapV3SwapRouterABI, ethers.provider);
             const weth9 = await v3Router.WETH9();
             const swapAmount = token0Amount / 2n;
-            const swapRelayer = await vaultNative.swapRelayer();
+            const swapRelayer = await ethers.getContractAt("SwapRelayer", await vaultNative.swapRelayer());
+            await swapRelayer.setWhitelist([ v3Router.target ], [ true ]);
             const swapParams = [
                 weth9,
                 token1Native.target,
                 500,
-                swapRelayer,
+                swapRelayer.target,
                 UINT64_MAX,
                 swapAmount,
                 0n,
@@ -502,12 +503,13 @@ describe("TeaVaultAmbient", function () {
             const v3Router = new ethers.Contract(testRouter, UniswapV3SwapRouterABI, ethers.provider);
             const weth9 = await v3Router.WETH9();
             const swapAmount = token0Amount / 2n;
-            const swapRelayer = await vaultNative.swapRelayer();
+            const swapRelayer = await ethers.getContractAt("SwapRelayer", await vaultNative.swapRelayer());
+            await swapRelayer.setWhitelist([ v3Router.target ], [ true ]);
             const swapParams = [
                 weth9,
                 token1Native.target,
                 500,
-                swapRelayer,
+                swapRelayer.target,
                 UINT64_MAX,
                 swapAmount,
                 0n,
@@ -551,12 +553,13 @@ describe("TeaVaultAmbient", function () {
             const v3Router = new ethers.Contract(testRouter, UniswapV3SwapRouterABI, ethers.provider);
             const weth9 = await v3Router.WETH9();
             const swapAmount = token0Amount / 2n;
-            const swapRelayer = await vaultNative.swapRelayer();
+            const swapRelayer = await ethers.getContractAt("SwapRelayer", await vaultNative.swapRelayer());
+            await swapRelayer.setWhitelist([ v3Router.target ], [ true ]);
             const swapParams = [
                 weth9,
                 token1Native.target,
                 500,
-                swapRelayer,
+                swapRelayer.target,
                 UINT64_MAX,
                 swapAmount,
                 0n,
@@ -567,7 +570,39 @@ describe("TeaVaultAmbient", function () {
             const uniswapV3SwapData = v3Router.interface.encodeFunctionData("exactInputSingle", [ swapParams ]);
             await expect(vaultNative.connect(manager).executeSwap(true, swapAmount, outAmount + 1n, deadline, v3Router.target, uniswapV3SwapData))
             .to.be.revertedWithCustomError(vaultNative, "TransactionExpired");
-        });        
+        });
+        
+        it("Should not be able to swap using 3rd party pool without whitelist", async function() {
+            const { user, manager, vaultNative, token1Native } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+
+            // deposit
+            const token0Decimals = NATIVE_DECIMALS;
+            const vaultDecimals = await vaultNative.decimals();
+            const shares = ethers.parseUnits("1", vaultDecimals);
+            const token0Amount = ethers.parseUnits("1", token0Decimals);
+            await vaultNative.connect(user).deposit(shares, token0Amount, 0n, { value: token0Amount });
+
+            // manager swap, using UniswapV3
+            const v3Router = new ethers.Contract(testRouter, UniswapV3SwapRouterABI, ethers.provider);
+            const weth9 = await v3Router.WETH9();
+            const swapAmount = token0Amount / 2n;
+            const swapRelayer = await ethers.getContractAt("SwapRelayer", await vaultNative.swapRelayer());
+            const swapParams = [
+                weth9,
+                token1Native.target,
+                500,
+                swapRelayer.target,
+                UINT64_MAX,
+                swapAmount,
+                0n,
+                0n
+            ];
+            const deadline = (await getCurrentTime()) + 1000;
+            const outAmount = await v3Router.connect(user).exactInputSingle.staticCall(swapParams, { value: swapAmount });
+            const uniswapV3SwapData = v3Router.interface.encodeFunctionData("exactInputSingle", [ swapParams ]);
+            await expect(vaultNative.connect(manager).executeSwap(true, swapAmount, outAmount + 1n, deadline, v3Router.target, uniswapV3SwapData))
+            .to.be.revertedWithCustomError(swapRelayer, "NotWhitelisted");
+        });
 
         it("Should not be able to do in-pool swap from non-manager", async function() {
             const { user, manager, vaultNative } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
@@ -600,12 +635,13 @@ describe("TeaVaultAmbient", function () {
             const v3Router = new ethers.Contract(testRouter, UniswapV3SwapRouterABI, ethers.provider);
             const weth9 = await v3Router.WETH9();
             const swapAmount = token0Amount / 2n;
-            const swapRelayer = await vaultNative.swapRelayer();
+            const swapRelayer = await ethers.getContractAt("SwapRelayer", await vaultNative.swapRelayer());
+            await swapRelayer.setWhitelist([ v3Router.target ], [ true ]);
             const swapParams = [
                 weth9,
                 token1Native.target,
                 500,
-                swapRelayer,
+                swapRelayer.target,
                 UINT64_MAX,
                 swapAmount,
                 0n,
@@ -648,12 +684,13 @@ describe("TeaVaultAmbient", function () {
             const v3Router = new ethers.Contract(testRouter, UniswapV3SwapRouterABI, ethers.provider);
             const weth9 = await v3Router.WETH9();
             const swapAmount = token0Amount / 2n;
-            const swapRelayer = await vaultNative.swapRelayer();
+            const swapRelayer = await ethers.getContractAt("SwapRelayer", await vaultNative.swapRelayer());
+            await swapRelayer.setWhitelist([ v3Router.target ], [ true ]);
             const swapParams = [
                 weth9,
                 token1Native.target,
                 500,
-                swapRelayer,
+                swapRelayer.target,
                 UINT64_MAX,
                 swapAmount,
                 0n,
@@ -951,12 +988,13 @@ describe("TeaVaultAmbient", function () {
             // manager swap, using UniswapV3
             const v3Router = new ethers.Contract(testRouter, UniswapV3SwapRouterABI, ethers.provider);
             const swapAmount = token0Amount / 2n;
-            const swapRelayer = await vaultERC20.swapRelayer();
+            const swapRelayer = await ethers.getContractAt("SwapRelayer", await vaultERC20.swapRelayer());
+            await swapRelayer.setWhitelist([ v3Router.target ], [ true ]);
             const swapParams = [
                 token0ERC20.target,
                 token1ERC20.target,
                 500,
-                swapRelayer,
+                swapRelayer.target,
                 UINT64_MAX,
                 swapAmount,
                 0n,
@@ -1009,12 +1047,13 @@ describe("TeaVaultAmbient", function () {
             // manager swap, using UniswapV3
             const v3Router = new ethers.Contract(testRouter, UniswapV3SwapRouterABI, ethers.provider);
             const swapAmount = token0Amount / 2n;
-            const swapRelayer = await vaultERC20.swapRelayer();
+            const swapRelayer = await ethers.getContractAt("SwapRelayer", await vaultERC20.swapRelayer());
+            await swapRelayer.setWhitelist([ v3Router.target ], [ true ]);
             const swapParams = [
                 token0ERC20.target,
                 token1ERC20.target,
                 500,
-                swapRelayer,
+                swapRelayer.target,
                 UINT64_MAX,
                 swapAmount,
                 0n,
@@ -1060,12 +1099,13 @@ describe("TeaVaultAmbient", function () {
             // manager swap, using UniswapV3
             const v3Router = new ethers.Contract(testRouter, UniswapV3SwapRouterABI, ethers.provider);
             const swapAmount = token0Amount / 2n;
-            const swapRelayer = await vaultERC20.swapRelayer();
+            const swapRelayer = await ethers.getContractAt("SwapRelayer", await vaultERC20.swapRelayer());
+            await swapRelayer.setWhitelist([ v3Router.target ], [ true ]);
             const swapParams = [
                 token0ERC20.target,
                 token1ERC20.target,
                 500,
-                swapRelayer,
+                swapRelayer.target,
                 UINT64_MAX,
                 swapAmount,
                 0n,
@@ -1077,7 +1117,40 @@ describe("TeaVaultAmbient", function () {
             const uniswapV3SwapData = v3Router.interface.encodeFunctionData("exactInputSingle", [ swapParams ]);
             await expect(vaultERC20.connect(manager).executeSwap(true, swapAmount, outAmount, deadline, v3Router.target, uniswapV3SwapData))
             .to.be.revertedWithCustomError(vaultERC20, "TransactionExpired");
-        });        
+        });
+
+        it("Should not be able to swap using 3rd party pool without whitelist", async function() {
+            const { user, manager, vaultERC20, token0ERC20, token1ERC20 } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
+
+            // deposit
+            const token0Decimals = await token0ERC20.decimals();
+            const vaultDecimals = await vaultERC20.decimals();
+            const shares = ethers.parseUnits("1", vaultDecimals);
+            const token0Amount = ethers.parseUnits("1", token0Decimals);
+            await token0ERC20.connect(user).approve(vaultERC20, token0Amount);
+            await vaultERC20.connect(user).deposit(shares, token0Amount, 0n);
+
+            // manager swap, using UniswapV3
+            const v3Router = new ethers.Contract(testRouter, UniswapV3SwapRouterABI, ethers.provider);
+            const swapAmount = token0Amount / 2n;
+            const swapRelayer = await ethers.getContractAt("SwapRelayer", await vaultERC20.swapRelayer());
+            const swapParams = [
+                token0ERC20.target,
+                token1ERC20.target,
+                500,
+                swapRelayer.target,
+                UINT64_MAX,
+                swapAmount,
+                0n,
+                0n
+            ];
+            const deadline = (await getCurrentTime()) + 1000;
+            await token0ERC20.connect(user).approve(v3Router, swapAmount);
+            const outAmount = await v3Router.connect(user).exactInputSingle.staticCall(swapParams);
+            const uniswapV3SwapData = v3Router.interface.encodeFunctionData("exactInputSingle", [ swapParams ]);
+            await expect(vaultERC20.connect(manager).executeSwap(true, swapAmount, outAmount, deadline, v3Router.target, uniswapV3SwapData))
+            .to.be.revertedWithCustomError(swapRelayer, "NotWhitelisted");
+        });
 
         it("Should not be able to do in-pool swap from non-manager", async function() {
             const { user, vaultERC20, token0ERC20 } = await helpers.loadFixture(deployTeaVaultAmbientFixture);
@@ -1112,12 +1185,13 @@ describe("TeaVaultAmbient", function () {
             const v3Router = new ethers.Contract(testRouter, UniswapV3SwapRouterABI, ethers.provider);
             const weth9 = await v3Router.WETH9();
             const swapAmount = token0Amount / 2n;
-            const swapRelayer = await vaultERC20.swapRelayer();
+            const swapRelayer = await ethers.getContractAt("SwapRelayer", await vaultERC20.swapRelayer());
+            await swapRelayer.setWhitelist([ v3Router.target ], [ true ]);
             const swapParams = [
                 weth9,
                 token1ERC20.target,
                 500,
-                swapRelayer,
+                swapRelayer.target,
                 UINT64_MAX,
                 swapAmount,
                 0n,
@@ -1161,12 +1235,13 @@ describe("TeaVaultAmbient", function () {
             const deadline = (await getCurrentTime()) + 1000;
             const v3Router = new ethers.Contract(testRouter, UniswapV3SwapRouterABI, ethers.provider);
             const swapAmount = token0Amount / 2n;
-            const swapRelayer = await vaultERC20.swapRelayer();
+            const swapRelayer = await ethers.getContractAt("SwapRelayer", await vaultERC20.swapRelayer());
+            await swapRelayer.setWhitelist([ v3Router.target ], [ true ]);
             const swapParams = [
                 token0ERC20.target,
                 token1ERC20.target,
                 500,
-                swapRelayer,
+                swapRelayer.target,
                 UINT64_MAX,
                 swapAmount,
                 0n,
