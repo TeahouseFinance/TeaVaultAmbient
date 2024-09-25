@@ -103,8 +103,9 @@ contract TeaVaultAmbient is
         SECONDS_IN_A_YEAR = 365 * 24 * 60 * 60;
         DECIMALS_MULTIPLIER = 10 ** _decimalOffset;
         FEE_MULTIPLIER = 1000000;
-        if (_feeCap >= FEE_MULTIPLIER) revert InvalidFeeCap();
-        FEE_CAP = _feeCap; 
+        // limit fee cap to 30%
+        if (_feeCap >= FEE_MULTIPLIER * 30 / 100) revert InvalidFeeCap();
+        FEE_CAP = _feeCap;
 
         _assignManager(_manager);
         _setFeeConfig(_feeConfig);

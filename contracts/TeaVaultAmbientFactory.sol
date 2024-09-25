@@ -45,7 +45,7 @@ contract TeaVaultAmbientFactory is ITeaVaultAmbientFactory, Initializable, UUPSU
         __Pausable_init();
 
         vaultBeacon = _beacon;
-        swapRelayer = new SwapRelayer();
+        swapRelayer = new SwapRelayer(_owner);
         ambientSwapDex = _ambientSwapDex;
         ambientImpact = _ambientImpact;
         ambientQuery = _ambientQuery;
